@@ -24,7 +24,7 @@ mongoose.connect(mongoURI, {
 })
 .then(() => console.log('✅ Connected to MongoDB'))
 .catch((err) => {
-  console.error('❌ MongoDB connection error:', err);
+  console.error('❌ MongoDB connection error:', err.message);
   process.exit(1);
 });
 
@@ -39,10 +39,11 @@ const Player = mongoose.model('Player', PlayerSchema);
 
 // ✅ Register player before checkout
 app.post('/register-player', async (req, res) => {
-  const { username, email } = req.body;
+  const username = req.body.username?.trim();
+  const email = req.body.email?.trim();
 
-  if (typeof username !== 'string' || typeof email !== 'string') {
-    return res.status(400).json({ error: 'Invalid or missing username/email' });
+  if (!username || !email) {
+    return res.status(400).json({ error: 'Missing or invalid username/email' });
   }
 
   try {
@@ -51,7 +52,7 @@ app.post('/register-player', async (req, res) => {
     console.log(`📝 Player saved: ${username} (${email})`);
     res.status(200).json({ message: 'Player registered successfully' });
   } catch (err) {
-    console.error('❌ MongoDB save error:', err);
+    console.error('❌ MongoDB save error:', err.message);
     res.status(500).json({ error: 'Failed to register player' });
   }
 });
@@ -70,7 +71,7 @@ app.post('/create-checkout-session', async (req, res) => {
     console.log(`💳 Stripe session created: ${session.id}`);
     res.json({ url: session.url });
   } catch (err) {
-    console.error('❌ Stripe error:', err);
+    console.error('❌ Stripe error:', err.message);
     res.status(500).json({ error: 'Checkout failed' });
   }
 });
@@ -84,7 +85,7 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*', // You can restrict this to your frontend domain
+    origin: '*',
     methods: ['GET', 'POST'],
   },
 });
