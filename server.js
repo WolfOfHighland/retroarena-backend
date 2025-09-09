@@ -13,7 +13,12 @@ const http = require('http');
 const { Server } = require('socket.io');
 
 const app = express();
-app.use(cors());
+
+// ✅ CORS whitelist for frontend domains
+app.use(cors({
+  origin: ['https://retrorumblearena.com', 'http://localhost:3000'],
+  methods: ['GET', 'POST'],
+}));
 app.use(express.json());
 
 // ✅ Connect to MongoDB with error handling
@@ -40,7 +45,7 @@ mongoose.connect(mongoURI, {
 const PlayerSchema = new mongoose.Schema({
   username: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  country: { type: String }, // Optional for global reach
+  country: { type: String },
   registeredAt: { type: Date, default: Date.now },
 });
 
@@ -63,7 +68,12 @@ app.post('/register-player', async (req, res) => {
       return res.status(409).json({ error: 'Player already registered' });
     }
 
-    const newPlayer = new Player({ username: username.trim(), email: email.trim(), country });
+    const newPlayer = new Player({
+      username: username.trim(),
+      email: email.trim(),
+      country: country?.trim(),
+    });
+
     await newPlayer.save();
     console.log(`📝 Player saved: ${username} (${email})`);
     res.status(200).json({ message: 'Player registered successfully' });
@@ -71,4 +81,57 @@ app.post('/register-player', async (req, res) => {
     console.error('❌ MongoDB save error:', err.message);
     res.status(500).json({ error: 'Failed to register player' });
   }
+});
+
+// ✅ Stripe Checkout route
+app.post('/create-checkout-session', async (req, res) => {
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: req.body.items,
+      mode: 'payment',
+      success_url: 'https://retrorumblearena.com/success',
+      cancel_url: 'https://retrorumblearena.com/cancel',
+    });
+
+    console.log(`💳 Stripe session created: ${session.id}`);
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('❌ Stripe error:', err.message);
+    res.status(500).json({ error: 'Checkout failed' });
+  }
+});
+
+// ✅ Root route for sanity check
+app.get('/', (req, res) => {
+  res.send('Retro Rumble Backend is Live 🐺');
+});
+
+// 🔌 Setup HTTP server and Socket.IO
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: ['https://retrorumblearena.com', 'http://localhost:3000'],
+    methods: ['GET', 'POST'],
+  },
+  path: "/socket.io",
+  transports: ["polling", "websocket"],
+});
+
+io.on('connection', (socket) => {
+  console.log(`✅ Socket connected: ${socket.id}`);
+
+  socket.on('disconnect', (reason) => {
+    console.warn(`⚠️ Socket disconnected: ${socket.id} — Reason: ${reason}`);
+  });
+
+  // Future: emit tournament updates
+  // socket.emit('tournamentUpdate', { status: 'ready' });
+});
+
+// ✅ Start server with Socket.IO support
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`🚀 Backend running on port ${PORT}`);
 });
