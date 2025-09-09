@@ -3,25 +3,35 @@ require('dotenv').config(); // ✅ Load .env variables first
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // ✅ Stripe works
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, {
+// ✅ Connect to MongoDB with error handling
+const mongoURI = process.env.MONGO_URI;
+if (!mongoURI) {
+  console.error('❌ MONGO_URI is not defined in environment variables');
+  process.exit(1);
+}
+
+mongoose.connect(mongoURI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-});
-mongoose.connection.once('open', () => {
-  console.log('✅ Connected to MongoDB');
+})
+.then(() => console.log('✅ Connected to MongoDB'))
+.catch((err) => {
+  console.error('❌ MongoDB connection error:', err);
+  process.exit(1);
 });
 
-// ✅ Define Player schema
+// ✅ Define Player schema and model
 const PlayerSchema = new mongoose.Schema({
-  username: String,
-  email: String,
+  username: { type: String, required: true },
+  email: { type: String, required: true },
   registeredAt: { type: Date, default: Date.now },
 });
 
@@ -31,8 +41,8 @@ const Player = mongoose.model('Player', PlayerSchema);
 app.post('/register-player', async (req, res) => {
   const { username, email } = req.body;
 
-  if (!username || !email) {
-    return res.status(400).json({ error: 'Missing username or email' });
+  if (typeof username !== 'string' || typeof email !== 'string') {
+    return res.status(400).json({ error: 'Invalid or missing username/email' });
   }
 
   try {
@@ -41,7 +51,7 @@ app.post('/register-player', async (req, res) => {
     console.log(`📝 Player saved: ${username} (${email})`);
     res.status(200).json({ message: 'Player registered successfully' });
   } catch (err) {
-    console.error('MongoDB error:', err);
+    console.error('❌ MongoDB save error:', err);
     res.status(500).json({ error: 'Failed to register player' });
   }
 });
@@ -56,18 +66,42 @@ app.post('/create-checkout-session', async (req, res) => {
       success_url: 'https://retrorumblearena.com/success',
       cancel_url: 'https://retrorumblearena.com/cancel',
     });
-    res.json({ url: session.url }); // ✅ Return full redirect URL
+
+    console.log(`💳 Stripe session created: ${session.id}`);
+    res.json({ url: session.url });
   } catch (err) {
-    console.error('Stripe error:', err);
+    console.error('❌ Stripe error:', err);
     res.status(500).json({ error: 'Checkout failed' });
   }
 });
 
-// ✅ Optional: Root route for sanity check
+// ✅ Root route for sanity check
 app.get('/', (req, res) => {
   res.send('Retro Rumble Backend is Live 🐺');
 });
 
-app.listen(3000, () => {
-  console.log('Backend running on port 3000');
+// 🔌 Setup Socket.IO
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*', // You can restrict this to your frontend domain
+    methods: ['GET', 'POST'],
+  },
+});
+
+io.on('connection', (socket) => {
+  console.log(`✅ Socket connected: ${socket.id}`);
+
+  // Example: emit tournament updates
+  // socket.emit('tournamentUpdate', { status: 'ready' });
+
+  socket.on('disconnect', () => {
+    console.log(`⚠️ Socket disconnected: ${socket.id}`);
+  });
+});
+
+// ✅ Start server with Socket.IO support
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`🚀 Backend running on port ${PORT}`);
 });
