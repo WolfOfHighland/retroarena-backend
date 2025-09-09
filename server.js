@@ -1,5 +1,10 @@
 require('dotenv').config(); // ✅ Load .env variables first
 
+// 🧪 Sanity check for environment variables
+console.log("✅ STRIPE key loaded:", !!process.env.STRIPE_SECRET_KEY);
+console.log("✅ Mongo URI loaded:", !!process.env.MONGO_URI);
+console.log("✅ PORT loaded:", process.env.PORT);
+
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -45,6 +50,9 @@ const Player = mongoose.model('Player', PlayerSchema);
 app.post('/register-player', async (req, res) => {
   const { username, email, country } = req.body;
 
+  // 🧪 Log incoming payload
+  console.log("📨 Incoming registration payload:", req.body);
+
   if (!username?.trim() || !email?.trim()) {
     return res.status(400).json({ error: 'Missing or invalid username/email' });
   }
@@ -63,54 +71,4 @@ app.post('/register-player', async (req, res) => {
     console.error('❌ MongoDB save error:', err.message);
     res.status(500).json({ error: 'Failed to register player' });
   }
-});
-
-// ✅ Stripe Checkout route
-app.post('/create-checkout-session', async (req, res) => {
-  try {
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: req.body.items,
-      mode: 'payment',
-      success_url: 'https://retrorumblearena.com/success',
-      cancel_url: 'https://retrorumblearena.com/cancel',
-    });
-
-    console.log(`💳 Stripe session created: ${session.id}`);
-    res.json({ url: session.url });
-  } catch (err) {
-    console.error('❌ Stripe error:', err.message);
-    res.status(500).json({ error: 'Checkout failed' });
-  }
-});
-
-// ✅ Root route for sanity check
-app.get('/', (req, res) => {
-  res.send('Retro Rumble Backend is Live 🐺');
-});
-
-// 🔌 Setup Socket.IO
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST'],
-  },
-});
-
-io.on('connection', (socket) => {
-  console.log(`✅ Socket connected: ${socket.id}`);
-
-  // Future: emit tournament updates
-  // socket.emit('tournamentUpdate', { status: 'ready' });
-
-  socket.on('disconnect', () => {
-    console.log(`⚠️ Socket disconnected: ${socket.id}`);
-  });
-});
-
-// ✅ Start server with Socket.IO support
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
 });
