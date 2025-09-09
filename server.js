@@ -22,7 +22,10 @@ mongoose.connect(mongoURI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => console.log('✅ Connected to MongoDB'))
+.then(() => {
+  console.log('✅ Connected to MongoDB');
+  Player.init(); // Ensure indexes are built
+})
 .catch((err) => {
   console.error('❌ MongoDB connection error:', err.message);
   process.exit(1);
@@ -31,7 +34,8 @@ mongoose.connect(mongoURI, {
 // ✅ Define Player schema and model
 const PlayerSchema = new mongoose.Schema({
   username: { type: String, required: true },
-  email: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  country: { type: String }, // Optional for global reach
   registeredAt: { type: Date, default: Date.now },
 });
 
@@ -39,15 +43,19 @@ const Player = mongoose.model('Player', PlayerSchema);
 
 // ✅ Register player before checkout
 app.post('/register-player', async (req, res) => {
-  const username = req.body.username?.trim();
-  const email = req.body.email?.trim();
+  const { username, email, country } = req.body;
 
-  if (!username || !email) {
+  if (!username?.trim() || !email?.trim()) {
     return res.status(400).json({ error: 'Missing or invalid username/email' });
   }
 
   try {
-    const newPlayer = new Player({ username, email });
+    const existing = await Player.findOne({ email: email.trim() });
+    if (existing) {
+      return res.status(409).json({ error: 'Player already registered' });
+    }
+
+    const newPlayer = new Player({ username: username.trim(), email: email.trim(), country });
     await newPlayer.save();
     console.log(`📝 Player saved: ${username} (${email})`);
     res.status(200).json({ message: 'Player registered successfully' });
@@ -93,7 +101,7 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
   console.log(`✅ Socket connected: ${socket.id}`);
 
-  // Example: emit tournament updates
+  // Future: emit tournament updates
   // socket.emit('tournamentUpdate', { status: 'ready' });
 
   socket.on('disconnect', () => {
