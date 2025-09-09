@@ -15,10 +15,24 @@ const { Server } = require('socket.io');
 const app = express();
 
 // ✅ CORS whitelist for frontend domains
+const allowedOrigins = [
+  'https://retrorumblearena.com',
+  'https://www.retrorumblearena.com',
+  'http://localhost:3000',
+];
+
 app.use(cors({
-  origin: ['https://retrorumblearena.com', 'http://localhost:3000'],
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('❌ CORS: Origin not allowed'));
+    }
+  },
   methods: ['GET', 'POST'],
+  credentials: true,
 }));
+
 app.use(express.json());
 
 // ✅ Connect to MongoDB with error handling
@@ -112,8 +126,9 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: ['https://retrorumblearena.com', 'http://localhost:3000'],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
+    credentials: true,
   },
   path: "/socket.io",
   transports: ["polling", "websocket"],
