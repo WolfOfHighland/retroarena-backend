@@ -138,12 +138,26 @@ const io = new Server(server, {
 
 io.on('connection', (socket) => {
   console.log(`✅ Socket connected: ${socket.id}`);
+  console.log(`🌐 Origin: ${socket.handshake.headers.origin}`);
+  console.log(`📡 Transport: ${socket.conn.transport.name}`);
 
   socket.on('disconnect', (reason) => {
     console.warn(`⚠️ Socket disconnected: ${socket.id} — Reason: ${reason}`);
     if (reason === 'transport close') {
       console.log('🔄 Likely reconnecting due to Render cold start or network drop');
     }
+  });
+
+  socket.conn.on('packet', (packet) => {
+    if (packet.type === 'ping') {
+      console.log(`💓 Ping received from ${socket.id}`);
+    }
+  });
+
+  socket.on('resyncPlayer', ({ playerId }) => {
+    console.log(`🔁 Resync requested for player: ${playerId}`);
+    // TODO: Rejoin lobby, restore match state, emit updates
+    // socket.emit('matchState', { status: 'waiting', bracket: 'A1' });
   });
 
   // Future: emit tournament updates
