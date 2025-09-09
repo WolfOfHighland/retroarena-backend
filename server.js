@@ -69,7 +69,6 @@ const Player = mongoose.model('Player', PlayerSchema);
 app.post('/register-player', async (req, res) => {
   const { username, email, country } = req.body;
 
-  // 🧪 Log incoming payload
   console.log("📨 Incoming registration payload:", req.body);
 
   if (!username?.trim() || !email?.trim()) {
@@ -132,6 +131,9 @@ const io = new Server(server, {
   },
   path: "/socket.io",
   transports: ["polling", "websocket"],
+  pingTimeout: 30000,
+  pingInterval: 25000,
+  allowEIO3: true,
 });
 
 io.on('connection', (socket) => {
@@ -139,6 +141,9 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', (reason) => {
     console.warn(`⚠️ Socket disconnected: ${socket.id} — Reason: ${reason}`);
+    if (reason === 'transport close') {
+      console.log('🔄 Likely reconnecting due to Render cold start or network drop');
+    }
   });
 
   // Future: emit tournament updates
