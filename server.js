@@ -216,10 +216,20 @@ app.post("/start-match", async (req, res) => {
   console.log(`🎮 Starting match for tournament ${tournamentId}`);
   const matchState = { rom, core };
 
-  // 💾 Save match state for reconnects
   await saveMatchState(tournamentId, matchState);
-
-  // 📤 Emit to tournament room
   io.to(tournamentId).emit("matchStart", matchState);
   res.send("Match start emitted");
+});
+
+// ✅ Match lifecycle emit route
+app.post("/admin/match-status", (req, res) => {
+  const { tournamentId, status } = req.body;
+
+  if (!tournamentId || !status) {
+    return res.status(400).json({ error: "Missing tournamentId or status" });
+  }
+
+  console.log(`📣 Match status update for ${tournamentId}: ${status}`);
+  io.to(tournamentId).emit("matchStatus", { status });
+  res.send("Match status emitted");
 });
