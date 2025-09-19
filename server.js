@@ -146,13 +146,21 @@ app.post('/register-player', async (req, res) => {
   try {
     const existing = await Player.findOne({ email: trimmedEmail });
 
+    const roomExists = io.sockets.adapter.rooms.has(trimmedEmail);
+    console.log(`📦 Room exists for ${trimmedEmail}:`, roomExists);
+    console.log('📦 All active rooms:', Array.from(io.sockets.adapter.rooms.keys()));
+
     if (existing) {
       console.log(`⚠️ Duplicate registration attempt: ${trimmedEmail}`);
-      io.to(trimmedEmail).emit('registrationConfirmed', {
-        username: existing.username,
-        status: 'existing',
-      });
-      console.log(`📤 Emitting registrationConfirmed to room: ${trimmedEmail}`);
+      if (roomExists) {
+        io.to(trimmedEmail).emit('registrationConfirmed', {
+          username: existing.username,
+          status: 'existing',
+        });
+        console.log(`📤 Emitting registrationConfirmed to room: ${trimmedEmail}`);
+      } else {
+        console.warn(`⚠️ Room ${trimmedEmail} not found — emit may fail`);
+      }
       return res.status(409).json({ error: 'Player already registered' });
     }
 
@@ -165,11 +173,15 @@ app.post('/register-player', async (req, res) => {
     await newPlayer.save();
     console.log(`📝 Player saved: ${trimmedUsername} (${trimmedEmail})`);
 
-    io.to(trimmedEmail).emit('registrationConfirmed', {
-      username: trimmedUsername,
-      status: 'new',
-    });
-    console.log(`📤 Emitting registrationConfirmed to room: ${trimmedEmail}`);
+    if (roomExists) {
+      io.to(trimmedEmail).emit('registrationConfirmed', {
+        username: trimmedUsername,
+        status: 'new',
+      });
+      console.log(`📤 Emitting registrationConfirmed to room: ${trimmedEmail}`);
+    } else {
+      console.warn(`⚠️ Room ${trimmedEmail} not found — emit may fail`);
+    }
 
     return res.status(200).json({ message: 'Player registered successfully' });
   } catch (err) {
