@@ -1,171 +1,181 @@
-require('dotenv').config(); // ✅ Load .env variables first
-
-// 🧪 Sanity check for environment variables
-console.log("✅ STRIPE key loaded:", !!process.env.STRIPE_SECRET_KEY);
-console.log("✅ Mongo URI loaded:", !!process.env.MONGO_URI);
-console.log("✅ PORT loaded:", process.env.PORT);
+require('dotenv').config();
 
 const express = require('express');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const http = require('http');
 const { Server } = require('socket.io');
+const mongoose = require('mongoose');
+const { createAdapter } = require('@socket.io/redis-adapter');
+const { createClient } = require('redis');
+const cors = require('cors');
 
 const app = express();
-
-// ✅ CORS whitelist for frontend domains
-const allowedOrigins = [
-  'https://retrorumblearena.com',
-  'https://www.retrorumblearena.com',
-  'http://localhost:3000',
-];
-
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('❌ CORS: Origin not allowed'));
-    }
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
   },
-  methods: ['GET', 'POST'],
-  credentials: true,
-}));
+});
 
+app.use(cors());
 app.use(express.json());
 
-// ✅ Connect to MongoDB with error handling
-const mongoURI = process.env.MONGO_URI;
-if (!mongoURI) {
-  console.error('❌ MONGO_URI is not defined in environment variables');
-  process.exit(1);
-}
+// ✅ Health check route
+app.get("/ping", (req, res) => {
+  res.send("pong");
+});
 
-mongoose.connect(mongoURI, {
+// ✅ Redis connection using environment variable
+const pubClient = createClient({ url: process.env.REDIS_URL });
+const subClient = pubClient.duplicate();
+const redis = pubClient;
+
+(async () => {
+  try {
+    await pubClient.connect();
+    await subClient.connect();
+    io.adapter(createAdapter(pubClient, subClient));
+    console.log('🔌 Redis adapter connected');
+
+    const PORT = process.env.PORT || 10000;
+    server.listen(PORT, () => {
+      console.log(`🚀 Backend running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error('❌ Redis adapter failed to connect:', err.message);
+    process.exit(1);
+  }
+})();
+
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/retroarena', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-})
-.then(() => {
+}).then(() => {
   console.log('✅ Connected to MongoDB');
-  Player.init(); // Ensure indexes are built
-})
-.catch((err) => {
+}).catch((err) => {
   console.error('❌ MongoDB connection error:', err.message);
-  process.exit(1);
 });
 
-// ✅ Define Player schema and model
-const PlayerSchema = new mongoose.Schema({
-  username: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  country: { type: String },
-  registeredAt: { type: Date, default: Date.now },
+const playerSchema = new mongoose.Schema({
+  username: String,
+  email: String,
+  country: String,
+});
+const Player = mongoose.model('Player', playerSchema);
+
+async function saveMatchState(matchId, state) {
+  await redis.set(`match:${matchId}`, JSON.stringify(state));
+  console.log(`💾 Match state saved for ${matchId}`);
+}
+
+async function loadMatchState(matchId) {
+  const data = await redis.get(`match:${matchId}`);
+  if (data) {
+    console.log(`📥 Match state loaded for ${matchId}`);
+    return JSON.parse(data);
+  } else {
+    console.log(`⚠️ No match state found for ${matchId}`);
+    return null;
+  }
+}
+
+io.on('connection', (socket) => {
+  console.log(`✅ Socket connected: ${socket.id}`);
+
+  socket.onAny((event, payload) => {
+    console.log(`📡 Received socket event: ${event}`, payload);
+  });
+
+  socket.on("registerRoom", ({ room }) => {
+    console.log(`📥 registerRoom received:`, room);
+    socket.join(room);
+    console.log(`📡 Socket ${socket.id} joined room: ${room}`);
+    console.log(`📦 Current socket rooms:`, Array.from(socket.rooms));
+  });
+
+  socket.on('testPing', (data) => {
+    console.log('🧪 testPing received:', data);
+    socket.emit('testPong', { message: 'pong from backend' });
+  });
+
+  socket.on('resyncRequest', async ({ matchId }) => {
+    const state = await loadMatchState(matchId);
+    if (state) {
+      socket.emit('resyncMatch', state);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`❌ Socket disconnected: ${socket.id}`);
+  });
 });
 
-const Player = mongoose.model('Player', PlayerSchema);
-
-// ✅ Register player before checkout
 app.post('/register-player', async (req, res) => {
   const { username, email, country } = req.body;
-
-  console.log("📨 Incoming registration payload:", req.body);
+  console.log('📨 Incoming registration payload:', req.body);
 
   if (!username?.trim() || !email?.trim()) {
-    return res.status(400).json({ error: 'Missing or invalid username/email' });
+    return res.status(400).json({ error: 'Missing required fields' });
   }
 
+  const trimmedUsername = username.trim();
+  const trimmedEmail = email.trim();
+  const trimmedCountry = country?.trim();
+
   try {
-    const existing = await Player.findOne({ email: email.trim() });
+    const existing = await Player.findOne({ email: trimmedEmail });
+
     if (existing) {
+      console.log(`⚠️ Duplicate registration attempt: ${trimmedEmail}`);
+      io.to(trimmedEmail).emit('registrationConfirmed', {
+        username: existing.username,
+        status: 'existing',
+      });
+      console.log(`📤 Emitting registrationConfirmed to room: ${trimmedEmail}`);
       return res.status(409).json({ error: 'Player already registered' });
     }
 
     const newPlayer = new Player({
-      username: username.trim(),
-      email: email.trim(),
-      country: country?.trim(),
+      username: trimmedUsername,
+      email: trimmedEmail,
+      country: trimmedCountry,
     });
 
     await newPlayer.save();
-    console.log(`📝 Player saved: ${username} (${email})`);
-    res.status(200).json({ message: 'Player registered successfully' });
-  } catch (err) {
-    console.error('❌ MongoDB save error:', err.message);
-    res.status(500).json({ error: 'Failed to register player' });
-  }
-});
+    console.log(`📝 Player saved: ${trimmedUsername} (${trimmedEmail})`);
 
-// ✅ Stripe Checkout route
-app.post('/create-checkout-session', async (req, res) => {
-  try {
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: req.body.items,
-      mode: 'payment',
-      success_url: 'https://retrorumblearena.com/success',
-      cancel_url: 'https://retrorumblearena.com/cancel',
+    io.to(trimmedEmail).emit('registrationConfirmed', {
+      username: trimmedUsername,
+      status: 'new',
     });
+    console.log(`📤 Emitting registrationConfirmed to room: ${trimmedEmail}`);
 
-    console.log(`💳 Stripe session created: ${session.id}`);
-    res.json({ url: session.url });
+    return res.status(200).json({ message: 'Player registered successfully' });
   } catch (err) {
-    console.error('❌ Stripe error:', err.message);
-    res.status(500).json({ error: 'Checkout failed' });
+    console.error('❌ Registration error:', err.message);
+    return res.status(500).json({ error: 'Failed to register player' });
   }
 });
 
-// ✅ Root route for sanity check
-app.get('/', (req, res) => {
-  res.send('Retro Rumble Backend is Live 🐺');
+app.post("/test-room", (req, res) => {
+  const { room } = req.body;
+  console.log(`📤 Manual emit to room: ${room}`);
+  io.to(room).emit("registrationConfirmed", {
+    username: "WolfTest",
+    status: "new",
+  });
+  res.send("Emit sent");
 });
 
-// 🔌 Setup HTTP server and Socket.IO
-const server = http.createServer(app);
+// ✅ New route to trigger match start
+app.post("/start-match", (req, res) => {
+  const { tournamentId, rom, core } = req.body;
 
-const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
-  path: "/socket.io",
-  transports: ["polling", "websocket"],
-  pingTimeout: 30000,
-  pingInterval: 25000,
-  allowEIO3: true,
-});
+  if (!tournamentId || !rom || !core) {
+    return res.status(400).json({ error: "Missing tournamentId, rom, or core" });
+  }
 
-io.on('connection', (socket) => {
-  console.log(`✅ Socket connected: ${socket.id}`);
-  console.log(`🌐 Origin: ${socket.handshake.headers.origin}`);
-  console.log(`📡 Transport: ${socket.conn.transport.name}`);
-
-  socket.on('disconnect', (reason) => {
-    console.warn(`⚠️ Socket disconnected: ${socket.id} — Reason: ${reason}`);
-    if (reason === 'transport close') {
-      console.log('🔄 Likely reconnecting due to Render cold start or network drop');
-    }
-  });
-
-  socket.conn.on('packet', (packet) => {
-    if (packet.type === 'ping') {
-      console.log(`💓 Ping received from ${socket.id}`);
-    }
-  });
-
-  socket.on('resyncPlayer', ({ playerId }) => {
-    console.log(`🔁 Resync requested for player: ${playerId}`);
-    // TODO: Rejoin lobby, restore match state, emit updates
-    // socket.emit('matchState', { status: 'waiting', bracket: 'A1' });
-  });
-
-  // Future: emit tournament updates
-  // socket.emit('tournamentUpdate', { status: 'ready' });
-});
-
-// ✅ Start server with Socket.IO support
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
+  console.log(`🎮 Starting match for tournament ${tournamentId}`);
+  io.to(tournamentId).emit("matchStart", { rom, core });
+  res.send("Match start emitted");
 });
