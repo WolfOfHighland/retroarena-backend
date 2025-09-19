@@ -122,6 +122,7 @@ io.on('connection', (socket) => {
   socket.on('resyncRequest', async ({ matchId }) => {
     const state = await loadMatchState(matchId);
     if (state) {
+      console.log(`🔁 Resyncing match state for ${matchId}`);
       socket.emit('resyncMatch', state);
     }
   });
@@ -205,7 +206,7 @@ app.post("/test-room", (req, res) => {
   res.send("Emit sent");
 });
 
-app.post("/start-match", (req, res) => {
+app.post("/start-match", async (req, res) => {
   const { tournamentId, rom, core } = req.body;
 
   if (!tournamentId || !rom || !core) {
@@ -213,6 +214,12 @@ app.post("/start-match", (req, res) => {
   }
 
   console.log(`🎮 Starting match for tournament ${tournamentId}`);
-  io.to(tournamentId).emit("matchStart", { rom, core });
+  const matchState = { rom, core };
+
+  // 💾 Save match state for reconnects
+  await saveMatchState(tournamentId, matchState);
+
+  // 📤 Emit to tournament room
+  io.to(tournamentId).emit("matchStart", matchState);
   res.send("Match start emitted");
 });
