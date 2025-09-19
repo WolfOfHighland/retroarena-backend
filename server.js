@@ -251,4 +251,4 @@ app.post("/admin/next-match", async (req, res) => {
   }
 
   console.log(`⏭️ Next match for ${tournamentId}: ${nextRom} (${nextCore})`);
- 
+  const nextMatch = { rom: nextRom, core: nextCore };
