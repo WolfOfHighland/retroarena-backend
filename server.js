@@ -25,36 +25,46 @@ app.get("/ping", (req, res) => {
   res.send("pong");
 });
 
-// ✅ Redis connection using environment variable
-const pubClient = createClient({ url: process.env.REDIS_URL });
-const subClient = pubClient.duplicate();
-const redis = pubClient;
+// ✅ Redis connection (optional)
+let redis;
+if (process.env.REDIS_URL) {
+  const pubClient = createClient({ url: process.env.REDIS_URL });
+  const subClient = pubClient.duplicate();
+  redis = pubClient;
 
-(async () => {
-  try {
-    await pubClient.connect();
-    await subClient.connect();
-    io.adapter(createAdapter(pubClient, subClient));
-    console.log('🔌 Redis adapter connected');
+  (async () => {
+    try {
+      await pubClient.connect();
+      await subClient.connect();
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log('🔌 Redis adapter connected');
+    } catch (err) {
+      console.error('⚠️ Redis failed — continuing without adapter:', err.message);
+    }
+  })();
+} else {
+  console.log('⚠️ No REDIS_URL provided — skipping Redis adapter');
+}
 
-    const PORT = process.env.PORT || 10000;
-    server.listen(PORT, () => {
-      console.log(`🚀 Backend running on port ${PORT}`);
-    });
-  } catch (err) {
-    console.error('❌ Redis adapter failed to connect:', err.message);
-    process.exit(1);
-  }
-})();
-
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/retroarena', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-}).then(() => {
-  console.log('✅ Connected to MongoDB');
-}).catch((err) => {
-  console.error('❌ MongoDB connection error:', err.message);
+// ✅ Always start server
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => {
+  console.log(`🚀 Backend running on port ${PORT}`);
 });
+
+// ✅ MongoDB connection (optional)
+if (process.env.MONGO_URI) {
+  mongoose.connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  }).then(() => {
+    console.log('✅ Connected to MongoDB');
+  }).catch((err) => {
+    console.error('⚠️ MongoDB connection failed:', err.message);
+  });
+} else {
+  console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
+}
 
 const playerSchema = new mongoose.Schema({
   username: String,
@@ -64,17 +74,28 @@ const playerSchema = new mongoose.Schema({
 const Player = mongoose.model('Player', playerSchema);
 
 async function saveMatchState(matchId, state) {
-  await redis.set(`match:${matchId}`, JSON.stringify(state));
-  console.log(`💾 Match state saved for ${matchId}`);
+  if (!redis) return;
+  try {
+    await redis.set(`match:${matchId}`, JSON.stringify(state));
+    console.log(`💾 Match state saved for ${matchId}`);
+  } catch (err) {
+    console.error(`⚠️ Failed to save match state: ${err.message}`);
+  }
 }
 
 async function loadMatchState(matchId) {
-  const data = await redis.get(`match:${matchId}`);
-  if (data) {
-    console.log(`📥 Match state loaded for ${matchId}`);
-    return JSON.parse(data);
-  } else {
-    console.log(`⚠️ No match state found for ${matchId}`);
+  if (!redis) return null;
+  try {
+    const data = await redis.get(`match:${matchId}`);
+    if (data) {
+      console.log(`📥 Match state loaded for ${matchId}`);
+      return JSON.parse(data);
+    } else {
+      console.log(`⚠️ No match state found for ${matchId}`);
+      return null;
+    }
+  } catch (err) {
+    console.error(`⚠️ Failed to load match state: ${err.message}`);
     return null;
   }
 }
@@ -167,7 +188,6 @@ app.post("/test-room", (req, res) => {
   res.send("Emit sent");
 });
 
-// ✅ New route to trigger match start
 app.post("/start-match", (req, res) => {
   const { tournamentId, rom, core } = req.body;
 
