@@ -236,3 +236,17 @@ app.post("/admin/match-status", (req, res) => {
   io.to(tournamentId).emit("matchStatus", { status });
   res.send("Match status emitted");
 });
+
+// ✅ Next match emit route
+app.post("/admin/next-match", async (req, res) => {
+  const { tournamentId, nextRom, nextCore } = req.body;
+
+  if (!tournamentId || !nextRom || !nextCore) {
+    return res.status(400).json({ error: "Missing tournamentId, nextRom, or nextCore" });
+  }
+
+  console.log(`⏭️ Next match for ${tournamentId}: ${nextRom} (${nextCore})`);
+  const nextMatch = { rom: nextRom, core: nextCore };
+
+  await saveMatchState(tournamentId, nextMatch);
+  io.to(tournamentId).emit("nextMatch", nextMatch);
