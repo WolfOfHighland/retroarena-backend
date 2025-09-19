@@ -250,3 +250,5 @@ app.post("/admin/next-match", async (req, res) => {
 
   await saveMatchState(tournamentId, nextMatch);
   io.to(tournamentId).emit("nextMatch", nextMatch);
+  res.send("Next match emitted");
+});
