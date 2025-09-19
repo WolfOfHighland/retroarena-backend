@@ -132,7 +132,7 @@ io.on('connection', (socket) => {
 });
 
 app.post('/register-player', async (req, res) => {
-  const { username, email, country } = req.body;
+  const { username, email, country, socketId } = req.body;
   console.log('📨 Incoming registration payload:', req.body);
 
   if (!username?.trim() || !email?.trim()) {
@@ -150,16 +150,21 @@ app.post('/register-player', async (req, res) => {
     console.log(`📦 Room exists for ${trimmedEmail}:`, roomExists);
     console.log('📦 All active rooms:', Array.from(io.sockets.adapter.rooms.keys()));
 
+    const emitPayload = {
+      username: existing ? existing.username : trimmedUsername,
+      status: existing ? 'existing' : 'new',
+    };
+
     if (existing) {
       console.log(`⚠️ Duplicate registration attempt: ${trimmedEmail}`);
       if (roomExists) {
-        io.to(trimmedEmail).emit('registrationConfirmed', {
-          username: existing.username,
-          status: 'existing',
-        });
+        io.to(trimmedEmail).emit('registrationConfirmed', emitPayload);
         console.log(`📤 Emitting registrationConfirmed to room: ${trimmedEmail}`);
+      } else if (socketId) {
+        io.to(socketId).emit('registrationConfirmed', emitPayload);
+        console.log(`📤 Fallback emit to socketId: ${socketId}`);
       } else {
-        console.warn(`⚠️ Room ${trimmedEmail} not found — emit may fail`);
+        console.warn(`⚠️ No room or socketId available — emit skipped`);
       }
       return res.status(409).json({ error: 'Player already registered' });
     }
@@ -174,13 +179,13 @@ app.post('/register-player', async (req, res) => {
     console.log(`📝 Player saved: ${trimmedUsername} (${trimmedEmail})`);
 
     if (roomExists) {
-      io.to(trimmedEmail).emit('registrationConfirmed', {
-        username: trimmedUsername,
-        status: 'new',
-      });
+      io.to(trimmedEmail).emit('registrationConfirmed', emitPayload);
       console.log(`📤 Emitting registrationConfirmed to room: ${trimmedEmail}`);
+    } else if (socketId) {
+      io.to(socketId).emit('registrationConfirmed', emitPayload);
+      console.log(`📤 Fallback emit to socketId: ${socketId}`);
     } else {
-      console.warn(`⚠️ Room ${trimmedEmail} not found — emit may fail`);
+      console.warn(`⚠️ No room or socketId available — emit skipped`);
     }
 
     return res.status(200).json({ message: 'Player registered successfully' });
