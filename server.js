@@ -23,17 +23,14 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// ✅ Root route to prevent 404
 app.get("/", (req, res) => {
   res.send("Retro Rumble Arena backend is live 🐺");
 });
 
-// ✅ Health check route
 app.get("/ping", (req, res) => {
   res.send("pong");
 });
 
-// ✅ Redis connection (optional)
 let redis;
 if (process.env.REDIS_URL) {
   const pubClient = createClient({ url: process.env.REDIS_URL });
@@ -54,13 +51,11 @@ if (process.env.REDIS_URL) {
   console.log('⚠️ No REDIS_URL provided — skipping Redis adapter');
 }
 
-// ✅ Always start server
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`🚀 Backend running on port ${PORT}`);
 });
 
-// ✅ MongoDB connection (optional)
 if (process.env.MONGO_URI) {
   mongoose.connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
@@ -229,7 +224,6 @@ app.post("/start-match", async (req, res) => {
   res.send("Match start emitted");
 });
 
-// ✅ Match lifecycle emit route
 app.post("/admin/match-status", (req, res) => {
   const { tournamentId, status } = req.body;
 
@@ -242,7 +236,6 @@ app.post("/admin/match-status", (req, res) => {
   res.send("Match status emitted");
 });
 
-// ✅ Next match emit route
 app.post("/admin/next-match", async (req, res) => {
   const { tournamentId, nextRom, nextCore } = req.body;
 
@@ -251,4 +244,6 @@ app.post("/admin/next-match", async (req, res) => {
   }
 
   console.log(`⏭️ Next match for ${tournamentId}: ${nextRom} (${nextCore})`);
-  const nextMatch = { rom: nextRom,
+  const nextMatch = { rom: nextRom, core: nextCore };
+
+  await saveMatchState(tournamentId, nextMatch);
