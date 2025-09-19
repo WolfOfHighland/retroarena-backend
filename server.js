@@ -23,6 +23,11 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
+// ✅ Root route to prevent 404
+app.get("/", (req, res) => {
+  res.send("Retro Rumble Arena backend is live 🐺");
+});
+
 // ✅ Health check route
 app.get("/ping", (req, res) => {
   res.send("pong");
@@ -246,9 +251,4 @@ app.post("/admin/next-match", async (req, res) => {
   }
 
   console.log(`⏭️ Next match for ${tournamentId}: ${nextRom} (${nextCore})`);
-  const nextMatch = { rom: nextRom, core: nextCore };
-
-  await saveMatchState(tournamentId, nextMatch);
-  io.to(tournamentId).emit("nextMatch", nextMatch);
-  res.send("Next match emitted");
-});
+ 
