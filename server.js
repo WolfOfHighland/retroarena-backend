@@ -8,9 +8,6 @@ const { createAdapter } = require('@socket.io/redis-adapter');
 const { createClient } = require('redis');
 const cors = require('cors');
 
-// 🐺 Dummy line for Git commit tracking
-// 🐺 Another dummy line for Git commit tracking
-
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -217,7 +214,7 @@ app.post("/start-match", async (req, res) => {
   }
 
   console.log(`🎮 Starting match for tournament ${tournamentId}`);
-  const matchState = { rom, core };
+  const matchState = { rom, core, goalieMode: "manual_goalie" };
 
   await saveMatchState(tournamentId, matchState);
   io.to(tournamentId).emit("matchStart", matchState);
@@ -244,9 +241,7 @@ app.post("/admin/next-match", async (req, res) => {
   }
 
   console.log(`⏭️ Next match for ${tournamentId}: ${nextRom} (${nextCore})`);
-  const nextMatch = { rom: nextRom, core: nextCore };
-
-  await saveMatchState(tournamentId, nextMatch);
-  io.to(tournamentId).emit("nextMatch", nextMatch);
-  res.send("Next match emitted");
-});
+  const nextMatch = {
+    rom: nextRom,
+    core: nextCore,
+    goalieMode: "manual_goalie
