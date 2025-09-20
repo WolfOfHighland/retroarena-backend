@@ -114,6 +114,11 @@ io.on('connection', (socket) => {
     console.log(`📦 Current socket rooms:`, Array.from(socket.rooms));
   });
 
+  socket.on("joinTournament", (room) => {
+    console.log(`📡 Socket ${socket.id} joining tournament room: ${room}`);
+    socket.join(room);
+  });
+
   socket.on('testPing', (data) => {
     console.log('🧪 testPing received:', data);
     socket.emit('testPong', { message: 'pong from backend' });
@@ -256,7 +261,7 @@ app.post("/admin/next-match", async (req, res) => {
 
   await saveMatchState(tournamentId, nextMatch);
   io.to(tournamentId).emit("nextMatch", nextMatch);
-    console.log(`📤 Emitted nextMatch to room: ${tournamentId}`, nextMatch);
+  console.log(`📤 Emitted nextMatch to room: ${tournamentId}`, nextMatch);
 
   res.send("Next match emitted");
 });
