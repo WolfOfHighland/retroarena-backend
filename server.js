@@ -249,4 +249,14 @@ app.post("/admin/next-match", async (req, res) => {
 
   const nextMatch = {
     rom: nextRom,
-    core: nextCore
+    core: nextCore,
+    goalieMode: "manual_goalie",
+    matchId: tournamentId,
+  };
+
+  await saveMatchState(tournamentId, nextMatch);
+  io.to(tournamentId).emit("nextMatch", nextMatch);
+    console.log(`📤 Emitted nextMatch to room: ${tournamentId}`, nextMatch);
+
+  res.send("Next match emitted");
+});
