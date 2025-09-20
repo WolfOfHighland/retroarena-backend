@@ -214,7 +214,12 @@ app.post("/start-match", async (req, res) => {
   }
 
   console.log(`🎮 Starting match for tournament ${tournamentId}`);
-  const matchState = { rom, core, goalieMode: "manual_goalie" };
+  const matchState = {
+    rom,
+    core,
+    goalieMode: "manual_goalie",
+    matchId: tournamentId,
+  };
 
   await saveMatchState(tournamentId, matchState);
   io.to(tournamentId).emit("matchStart", matchState);
@@ -244,4 +249,8 @@ app.post("/admin/next-match", async (req, res) => {
   const nextMatch = {
     rom: nextRom,
     core: nextCore,
-    goalieMode: "manual_goalie
+    goalieMode: "manual_goalie",
+    matchId: tournamentId,
+  };
+
+ 
