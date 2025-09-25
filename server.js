@@ -7,6 +7,8 @@ const mongoose = require('mongoose');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const { createClient } = require('redis');
 const cors = require('cors');
+const Stripe = require('stripe');
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 const server = http.createServer(app);
@@ -15,6 +17,28 @@ const io = new Server(server, {
     origin: '*',
     methods: ['GET', 'POST'],
   },
+});
+
+// Stripe webhook requires raw body BEFORE express.json
+app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('❌ Webhook signature error:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
+    const matchId = session.success_url?.split('matchId=')[1];
+    console.log(`💰 Payment confirmed for match ${matchId}`);
+    // Optional: trigger matchStart or register player here
+  }
+
+  res.status(200).send();
 });
 
 app.use(cors());
@@ -264,4 +288,30 @@ app.post("/admin/next-match", async (req, res) => {
   console.log(`📤 Emitted nextMatch to room: ${tournamentId}`, nextMatch);
 
   res.send("Next match emitted");
+});
+
+app.post("/api/create-checkout-session", async (req, res) => {
+  const { matchId, entryFee, gameName } = req.body;
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: { name: `${gameName} Entry` },
+          unit_amount: entryFee * 100,
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `https://retrorumblearena.com/success?matchId=${matchId}`,
+      cancel_url: `https://retrorumblearena.com/cancel`,
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('❌ Stripe session error:', err.message);
+    res.status(500).json({ error: 'Failed to create checkout session' });
+  }
 });
