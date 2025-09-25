@@ -35,7 +35,13 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
     const session = event.data.object;
     const matchId = session.success_url?.split('matchId=')[1];
     console.log(`💰 Payment confirmed for match ${matchId}`);
-    // Optional: trigger matchStart or register player here
+
+    io.to(matchId).emit('matchStart', {
+      rom: 'NHL_95.bin',
+      core: 'genesis_plus_gx',
+      goalieMode: 'manual_goalie',
+      matchId,
+    });
   }
 
   res.status(200).send();
@@ -253,65 +259,4 @@ app.post("/start-match", async (req, res) => {
   await saveMatchState(tournamentId, matchState);
   io.to(tournamentId).emit("matchStart", matchState);
   res.send("Match start emitted");
-});
-
-app.post("/admin/match-status", (req, res) => {
-  const { tournamentId, status } = req.body;
-
-  if (!tournamentId || !status) {
-    return res.status(400).json({ error: "Missing tournamentId or status" });
-  }
-
-  console.log(`📣 Match status update for ${tournamentId}: ${status}`);
-  io.to(tournamentId).emit("matchStatus", { status });
-  res.send("Match status emitted");
-});
-
-app.post("/admin/next-match", async (req, res) => {
-  const { tournamentId, nextRom, nextCore } = req.body;
-
-  if (!tournamentId || !nextRom || !nextCore) {
-    return res.status(400).json({ error: "Missing tournamentId, nextRom, or nextCore" });
-  }
-
-  console.log(`⏭️ Next match for ${tournamentId}: ${nextRom} (${nextCore})`);
-
-  const nextMatch = {
-    rom: nextRom,
-    core: nextCore,
-    goalieMode: "manual_goalie",
-    matchId: tournamentId,
-  };
-
-  await saveMatchState(tournamentId, nextMatch);
-  io.to(tournamentId).emit("nextMatch", nextMatch);
-  console.log(`📤 Emitted nextMatch to room: ${tournamentId}`, nextMatch);
-
-  res.send("Next match emitted");
-});
-
-app.post("/api/create-checkout-session", async (req, res) => {
-  const { matchId, entryFee, gameName } = req.body;
-
-  try {
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [{
-        price_data: {
-          currency: 'usd',
-          product_data: { name: `${gameName} Entry` },
-          unit_amount: entryFee * 100,
-        },
-        quantity: 1,
-      }],
-      mode: 'payment',
-      success_url: `https://retrorumblearena.com/success?matchId=${matchId}`,
-      cancel_url: `https://retrorumblearena.com/cancel`,
-    });
-
-    res.json({ url: session.url });
-  } catch (err) {
-    console.error('❌ Stripe session error:', err.message);
-    res.status(500).json({ error: 'Failed to create checkout session' });
-  }
 });
