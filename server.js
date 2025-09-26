@@ -9,6 +9,11 @@ const { createClient } = require('redis');
 const cors = require('cors');
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.error('❌ STRIPE_SECRET_KEY is missing from environment');
+} else {
+  console.log(`🔐 Stripe key loaded: ${process.env.STRIPE_SECRET_KEY.slice(0, 10)}...`);
+}
 
 const app = express();
 const server = http.createServer(app);
