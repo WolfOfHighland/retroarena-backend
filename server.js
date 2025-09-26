@@ -270,6 +270,9 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 
   try {
+    console.log(`🔐 Using Stripe key: ${process.env.STRIPE_SECRET_KEY?.slice(0, 10)}...`);
+    console.log(`📦 Incoming checkout payload:`, { matchId, entryFee, gameName });
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
@@ -285,7 +288,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
       cancel_url: `https://retrorumblearena.com/cancel`,
     });
 
-    console.log(`🧾 Stripe session created for match ${matchId}`);
+    console.log(`🧾 Stripe session created: ${session.id}`);
     res.json({ url: session.url });
   } catch (err) {
     console.error('❌ Stripe session error:', err);
