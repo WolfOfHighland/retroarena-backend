@@ -268,28 +268,46 @@ app.post("/start-match", async (req, res) => {
 
 
 app.post("/api/create-checkout-session", async (req, res) => {
+  console.log("📥 Received POST /api/create-checkout-session");
+  console.log("📦 Raw body:", req.body);
+
   const { matchId, entryFee, gameName } = req.body;
 
   if (!matchId || !entryFee || !gameName) {
-    console.warn('⚠️ Missing required fields for checkout session');
-    return res.status(400).json({ error: "Missing matchId, entryFee, or gameName" });
+    console.warn("⚠️ Missing required fields for checkout session", {
+      matchId,
+      entryFee,
+      gameName,
+    });
+    return res
+      .status(400)
+      .json({ error: "Missing matchId, entryFee, or gameName" });
   }
 
   try {
-    console.log(`🔐 Stripe key prefix: ${process.env.STRIPE_SECRET_KEY?.slice(0, 10)}...`);
-    console.log(`📦 Checkout payload:`, { matchId, entryFee, gameName });
+    console.log(
+      `🔐 Stripe key prefix: ${process.env.STRIPE_SECRET_KEY?.slice(0, 10)}...`
+    );
+    console.log("📦 Checkout payload:", {
+      matchId,
+      entryFee,
+      gameName,
+      unit_amount: entryFee * 100,
+    });
 
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [{
-        price_data: {
-          currency: 'usd',
-          product_data: { name: `${gameName} Entry` },
-          unit_amount: entryFee * 100,
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: { name: `${gameName} Entry` },
+            unit_amount: entryFee * 100,
+          },
+          quantity: 1,
         },
-        quantity: 1,
-      }],
-      mode: 'payment',
+      ],
+      mode: "payment",
       success_url: `https://retrorumblearena.com/success?matchId=${matchId}`,
       cancel_url: `https://retrorumblearena.com/cancel`,
     });
@@ -297,7 +315,8 @@ app.post("/api/create-checkout-session", async (req, res) => {
     console.log(`🧾 Stripe session created: ${session.id}`);
     return res.json({ url: session.url });
   } catch (err) {
-    console.error('❌ Stripe session error:', {
+    console.error("❌ Stripe session error triggered");
+    console.error("❌ Stripe session error details:", {
       message: err.message,
       type: err.type,
       code: err.code,
@@ -306,7 +325,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
     });
 
     return res.status(500).json({
-      error: 'Stripe session creation failed',
+      error: "Stripe session creation failed",
       details: err.message,
     });
   }
