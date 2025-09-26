@@ -288,7 +288,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
     console.log(`🧾 Stripe session created for match ${matchId}`);
     res.json({ url: session.url });
   } catch (err) {
-    console.error('❌ Stripe session error:', err.message);
+    console.error('❌ Stripe session error:', err);
     res.status(500).json({ error: 'Failed to create checkout session' });
   }
 });
