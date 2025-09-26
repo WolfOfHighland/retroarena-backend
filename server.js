@@ -260,3 +260,35 @@ app.post("/start-match", async (req, res) => {
   io.to(tournamentId).emit("matchStart", matchState);
   res.send("Match start emitted");
 });
+
+app.post("/api/create-checkout-session", async (req, res) => {
+  const { matchId, entryFee, gameName } = req.body;
+
+  if (!matchId || !entryFee || !gameName) {
+    console.warn('⚠️ Missing required fields for checkout session');
+    return res.status(400).json({ error: "Missing matchId, entryFee, or gameName" });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: { name: `${gameName} Entry` },
+          unit_amount: entryFee * 100,
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `https://retrorumblearena.com/success?matchId=${matchId}`,
+      cancel_url: `https://retrorumblearena.com/cancel`,
+    });
+
+    console.log(`🧾 Stripe session created for match ${matchId}`);
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('❌ Stripe session error:', err.message);
+    res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
