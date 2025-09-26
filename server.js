@@ -261,6 +261,7 @@ app.post("/start-match", async (req, res) => {
   res.send("Match start emitted");
 });
 
+
 app.post("/api/create-checkout-session", async (req, res) => {
   const { matchId, entryFee, gameName } = req.body;
 
@@ -270,8 +271,8 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 
   try {
-    console.log(`🔐 Using Stripe key: ${process.env.STRIPE_SECRET_KEY?.slice(0, 10)}...`);
-    console.log(`📦 Incoming checkout payload:`, { matchId, entryFee, gameName });
+    console.log(`🔐 Stripe key prefix: ${process.env.STRIPE_SECRET_KEY?.slice(0, 10)}...`);
+    console.log(`📦 Checkout payload:`, { matchId, entryFee, gameName });
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -289,9 +290,19 @@ app.post("/api/create-checkout-session", async (req, res) => {
     });
 
     console.log(`🧾 Stripe session created: ${session.id}`);
-    res.json({ url: session.url });
+    return res.json({ url: session.url });
   } catch (err) {
-    console.error('❌ Stripe session error:', err);
-    res.status(500).json({ error: 'Failed to create checkout session' });
+    console.error('❌ Stripe session error:', {
+      message: err.message,
+      type: err.type,
+      code: err.code,
+      param: err.param,
+      raw: err.raw,
+    });
+
+    return res.status(500).json({
+      error: 'Stripe session creation failed',
+      details: err.message,
+    });
   }
 });
