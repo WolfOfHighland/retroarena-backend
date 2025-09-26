@@ -9,6 +9,7 @@ const { createClient } = require('redis');
 const cors = require('cors');
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
 if (!process.env.STRIPE_SECRET_KEY) {
   console.error('❌ STRIPE_SECRET_KEY is missing from environment');
 } else {
@@ -55,11 +56,24 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
 app.use(cors());
 app.use(express.json());
 
-app.get("/", (req, res) => {
+// Simple logger for all /api traffic (excludes /webhook to preserve raw body)
+app.use('/api', (req, _res, next) => {
+  console.log(`➡️ API ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+// Health checks
+app.get("/", (_req, res) => {
   res.send("Retro Rumble Arena backend is live 🐺");
 });
 
-app.get("/ping", (req, res) => {
+// Frontend rewrite test endpoint (for Vercel -> Render)
+app.get("/api/ping", (_req, res) => {
+  res.send("pong");
+});
+
+// Optional legacy ping
+app.get("/ping", (_req, res) => {
   res.send("pong");
 });
 
@@ -265,7 +279,6 @@ app.post("/start-match", async (req, res) => {
   io.to(tournamentId).emit("matchStart", matchState);
   res.send("Match start emitted");
 });
-
 
 app.post("/api/create-checkout-session", async (req, res) => {
   console.log("📥 Received POST /api/create-checkout-session");
