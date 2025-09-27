@@ -10,6 +10,16 @@ const cors = require('cors');
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
+// Models
+const Player = require('./models/Player');
+const Tournament = require('./models/Tournament');
+
+// Scheduler
+const { scheduleAllTournaments } = require('./scheduler/tournaments');
+
+// Import scheduler
+const { scheduleAllTournaments } = require('./scheduler/tournaments');
+
 if (!process.env.STRIPE_SECRET_KEY) {
   console.error('❌ STRIPE_SECRET_KEY is missing from environment');
 } else {
@@ -19,13 +29,11 @@ if (!process.env.STRIPE_SECRET_KEY) {
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST'],
-  },
+  cors: { origin: '*', methods: ['GET', 'POST'] },
 });
+module.exports.io = io; // export io for scheduler
 
-// Stripe webhook requires raw body BEFORE express.json
+// --- Stripe webhook (raw body required) ---
 app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
@@ -53,30 +61,22 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   res.status(200).send();
 });
 
+// --- Middleware ---
 app.use(cors());
 app.use(express.json());
 
-// Simple logger for all /api traffic (excludes /webhook to preserve raw body)
+// --- API logger ---
 app.use('/api', (req, _res, next) => {
   console.log(`➡️ API ${req.method} ${req.originalUrl}`);
   next();
 });
 
-// Health checks
-app.get("/", (_req, res) => {
-  res.send("Retro Rumble Arena backend is live 🐺");
-});
+// --- Health checks ---
+app.get("/", (_req, res) => res.send("Retro Rumble Arena backend is live 🐺"));
+app.get("/api/ping", (_req, res) => res.send("pong"));
+app.get("/ping", (_req, res) => res.send("pong"));
 
-// Frontend rewrite test endpoint (for Vercel -> Render)
-app.get("/api/ping", (_req, res) => {
-  res.send("pong");
-});
-
-// Optional legacy ping
-app.get("/ping", (_req, res) => {
-  res.send("pong");
-});
-
+// --- Redis setup ---
 let redis;
 if (process.env.REDIS_URL) {
   const pubClient = createClient({ url: process.env.REDIS_URL });
@@ -97,24 +97,18 @@ if (process.env.REDIS_URL) {
   console.log('⚠️ No REDIS_URL provided — skipping Redis adapter');
 }
 
-const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
-});
-
+// --- MongoDB setup ---
 if (process.env.MONGO_URI) {
   mongoose.connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-  }).then(() => {
-    console.log('✅ Connected to MongoDB');
-  }).catch((err) => {
-    console.error('⚠️ MongoDB connection failed:', err.message);
-  });
+  }).then(() => console.log('✅ Connected to MongoDB'))
+    .catch((err) => console.error('⚠️ MongoDB connection failed:', err.message));
 } else {
   console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
 }
 
+// --- Player model (inline for now, can move to models/Player.js) ---
 const playerSchema = new mongoose.Schema({
   username: String,
   email: String,
@@ -122,6 +116,7 @@ const playerSchema = new mongoose.Schema({
 });
 const Player = mongoose.model('Player', playerSchema);
 
+// --- Redis helpers ---
 async function saveMatchState(matchId, state) {
   if (!redis) return;
   try {
@@ -139,16 +134,16 @@ async function loadMatchState(matchId) {
     if (data) {
       console.log(`📥 Match state loaded for ${matchId}`);
       return JSON.parse(data);
-    } else {
-      console.log(`⚠️ No match state found for ${matchId}`);
-      return null;
     }
+    console.log(`⚠️ No match state found for ${matchId}`);
+    return null;
   } catch (err) {
     console.error(`⚠️ Failed to load match state: ${err.message}`);
     return null;
   }
 }
 
+// --- Socket.IO handlers ---
 io.on('connection', (socket) => {
   console.log(`✅ Socket connected: ${socket.id}`);
 
@@ -160,7 +155,6 @@ io.on('connection', (socket) => {
     console.log(`📥 registerRoom received:`, room);
     socket.join(room);
     console.log(`📡 Socket ${socket.id} joined room: ${room}`);
-    console.log(`📦 Current socket rooms:`, Array.from(socket.rooms));
   });
 
   socket.on("joinTournament", (room) => {
@@ -186,6 +180,7 @@ io.on('connection', (socket) => {
   });
 });
 
+// --- Routes ---
 app.post('/register-player', async (req, res) => {
   const { username, email, country, socketId } = req.body;
   console.log('📨 Incoming registration payload:', req.body);
@@ -200,10 +195,7 @@ app.post('/register-player', async (req, res) => {
 
   try {
     const existing = await Player.findOne({ email: trimmedEmail });
-
     const roomExists = io.sockets.adapter.rooms.has(trimmedEmail);
-    console.log(`📦 Room exists for ${trimmedEmail}:`, roomExists);
-    console.log('📦 All active rooms:', Array.from(io.sockets.adapter.rooms.keys()));
 
     const emitPayload = {
       username: existing ? existing.username : trimmedUsername,
@@ -214,33 +206,20 @@ app.post('/register-player', async (req, res) => {
       console.log(`⚠️ Duplicate registration attempt: ${trimmedEmail}`);
       if (roomExists) {
         io.to(trimmedEmail).emit('registrationConfirmed', emitPayload);
-        console.log(`📤 Emitting registrationConfirmed to room: ${trimmedEmail}`);
       } else if (socketId) {
         io.to(socketId).emit('registrationConfirmed', emitPayload);
-        console.log(`📤 Fallback emit to socketId: ${socketId}`);
-      } else {
-        console.warn(`⚠️ No room or socketId available — emit skipped`);
       }
       return res.status(409).json({ error: 'Player already registered' });
     }
 
-    const newPlayer = new Player({
-      username: trimmedUsername,
-      email: trimmedEmail,
-      country: trimmedCountry,
-    });
-
+    const newPlayer = new Player({ username: trimmedUsername, email: trimmedEmail, country: trimmedCountry });
     await newPlayer.save();
     console.log(`📝 Player saved: ${trimmedUsername} (${trimmedEmail})`);
 
     if (roomExists) {
       io.to(trimmedEmail).emit('registrationConfirmed', emitPayload);
-      console.log(`📤 Emitting registrationConfirmed to room: ${trimmedEmail}`);
     } else if (socketId) {
       io.to(socketId).emit('registrationConfirmed', emitPayload);
-      console.log(`📤 Fallback emit to socketId: ${socketId}`);
-    } else {
-      console.warn(`⚠️ No room or socketId available — emit skipped`);
     }
 
     return res.status(200).json({ message: 'Player registered successfully' });
@@ -252,62 +231,29 @@ app.post('/register-player', async (req, res) => {
 
 app.post("/test-room", (req, res) => {
   const { room } = req.body;
-  console.log(`📤 Manual emit to room: ${room}`);
-  io.to(room).emit("registrationConfirmed", {
-    username: "WolfTest",
-    status: "new",
-  });
+  io.to(room).emit("registrationConfirmed", { username: "WolfTest", status: "new" });
   res.send("Emit sent");
 });
 
 app.post("/start-match", async (req, res) => {
   const { tournamentId, rom, core } = req.body;
-
   if (!tournamentId || !rom || !core) {
     return res.status(400).json({ error: "Missing tournamentId, rom, or core" });
   }
 
-  console.log(`🎮 Starting match for tournament ${tournamentId}`);
-  const matchState = {
-    rom,
-    core,
-    goalieMode: "manual_goalie",
-    matchId: tournamentId,
-  };
-
+  const matchState = { rom, core, goalieMode: "manual_goalie", matchId: tournamentId };
   await saveMatchState(tournamentId, matchState);
   io.to(tournamentId).emit("matchStart", matchState);
   res.send("Match start emitted");
 });
 
 app.post("/api/create-checkout-session", async (req, res) => {
-  console.log("📥 Received POST /api/create-checkout-session");
-  console.log("📦 Raw body:", req.body);
-
   const { matchId, entryFee, gameName } = req.body;
-
   if (!matchId || !entryFee || !gameName) {
-    console.warn("⚠️ Missing required fields for checkout session", {
-      matchId,
-      entryFee,
-      gameName,
-    });
-    return res
-      .status(400)
-      .json({ error: "Missing matchId, entryFee, or gameName" });
+    return res.status(400).json({ error: "Missing matchId, entryFee, or gameName" });
   }
 
   try {
-    console.log(
-      `🔐 Stripe key prefix: ${process.env.STRIPE_SECRET_KEY?.slice(0, 10)}...`
-    );
-    console.log("📦 Checkout payload:", {
-      matchId,
-      entryFee,
-      gameName,
-      unit_amount: entryFee * 100,
-    });
-
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -341,5 +287,16 @@ app.post("/api/create-checkout-session", async (req, res) => {
       error: "Stripe session creation failed",
       details: err.message,
     });
+  }
+});
+
+// ✅ Server start (always last, outside of routes)
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, async () => {
+  console.log(`🚀 Backend running on port ${PORT}`);
+  try {
+    await scheduleAllTournaments(); // schedule tournaments on boot
+  } catch (err) {
+    console.error("⚠️ Failed to schedule tournaments:", err.message);
   }
 });
