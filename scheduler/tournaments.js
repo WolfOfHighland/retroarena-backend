@@ -1,24 +1,28 @@
 const Tournament = require("../models/Tournament");
-const { io } = require("../socket"); // adjust path to where you init Socket.IO
 
+// Utility: calculate delay until start
 function msUntil(date) {
   return Math.max(0, new Date(date).getTime() - Date.now());
 }
 
+// Utility: build matchStart payload
 function buildPayload(t) {
   return {
     rom: t.game === "NHL 95" ? "NHL_95.bin" : "NHL_94.bin",
     core: "genesis_plus_gx",
     goalieMode: t.goalieMode === "manual" ? "manual_goalie" : "auto_goalie",
+    matchId: t.id,
   };
 }
 
-async function scheduleAllTournaments() {
+// Schedule all tournaments on boot
+async function scheduleAllTournaments(io) {
   const upcoming = await Tournament.find({ status: "scheduled" });
-  upcoming.forEach(scheduleTournamentStart);
+  upcoming.forEach((t) => scheduleTournamentStart(t, io));
 }
 
-function scheduleTournamentStart(t) {
+// Schedule a single tournament
+function scheduleTournamentStart(t, io) {
   const delay = msUntil(t.startTime);
   const payload = buildPayload(t);
 

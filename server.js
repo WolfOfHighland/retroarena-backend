@@ -278,3 +278,13 @@ app.post("/api/create-checkout-session", async (req, res) => {
     });
   }
 });
+// ✅ Server start (always last, outside of routes)
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, async () => {
+  console.log(`🚀 Backend running on port ${PORT}`);
+  try {
+    await scheduleAllTournaments(io); // pass io into scheduler
+  } catch (err) {
+    console.error("⚠️ Failed to schedule tournaments:", err.message);
+  }
+});
