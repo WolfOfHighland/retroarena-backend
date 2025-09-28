@@ -283,16 +283,17 @@ app.post("/admin/seed-tournament", async (_req, res) => {
   try {
     const start = new Date(Date.now() + 60 * 1000); // 1 minute from now
     const t = await Tournament.create({
+      id: `test-${Date.now()}`,   // ✅ add required id field
       name: "Test Cup",
       game: "NHL 95",
       goalieMode: "manual",
       status: "scheduled",
       startTime: start,
     });
-    res.json({ ok: true, id: t._id.toString(), startTime: start });
+    res.json({ ok: true, id: t.id, mongoId: t._id.toString(), startTime: start });
   } catch (err) {
-    console.error("Seed error:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error("Seed error:", err);
+    res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
 // ✅ Server start (always last, outside of routes)
