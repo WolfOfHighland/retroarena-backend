@@ -230,10 +230,33 @@ app.post("/start-match", async (req, res) => {
     return res.status(400).json({ error: "Missing tournamentId, rom, or core" });
   }
 
-  const matchState = { rom, core, goalieMode: "manual", matchId: tournamentId };
-  await saveMatchState(tournamentId, matchState);
-  io.to(tournamentId).emit("matchStart", matchState);
-  res.send("Match start emitted");
+  try {
+    // Look up the tournament in Mongo
+    const tournament = await Tournament.findOne({ id: tournamentId });
+    if (!tournament) {
+      return res.status(404).json({ error: "Tournament not found" });
+    }
+
+    // Build match state using tournament settings
+    const matchState = {
+      rom,
+      core,
+      goalieMode: tournament.goalieMode || "manual", // fallback to manual
+      periodLength: tournament.periodLength,         // include other rules if needed
+      matchId: tournamentId,
+    };
+
+    // Persist match state (make sure saveMatchState is imported/defined)
+    await saveMatchState(tournamentId, matchState);
+
+    // Emit to all clients in this tournament room
+    io.to(tournamentId).emit("matchStart", matchState);
+
+    res.json({ ok: true, message: "Match start emitted", matchState });
+  } catch (err) {
+    console.error("❌ start-match error:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post("/api/create-checkout-session", async (req, res) => {
