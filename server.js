@@ -105,14 +105,6 @@ if (process.env.MONGO_URI) {
   console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
 }
 
-// --- Player model (inline for now, can move to models/Player.js) ---
-const playerSchema = new mongoose.Schema({
-  username: String,
-  email: String,
-  country: String,
-});
-const Player = mongoose.model('Player', playerSchema);
-
 // --- Redis helpers ---
 async function saveMatchState(matchId, state) {
   if (!redis) return;
@@ -284,16 +276,5 @@ app.post("/api/create-checkout-session", async (req, res) => {
       error: "Stripe session creation failed",
       details: err.message,
     });
-  }
-});
-
-// ✅ Server start (always last, outside of routes)
-const PORT = process.env.PORT || 10000;
-server.listen(PORT, async () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
-  try {
-    await scheduleAllTournaments(); // schedule tournaments on boot
-  } catch (err) {
-    console.error("⚠️ Failed to schedule tournaments:", err.message);
   }
 });
