@@ -230,7 +230,7 @@ app.post("/start-match", async (req, res) => {
     return res.status(400).json({ error: "Missing tournamentId, rom, or core" });
   }
 
-  const matchState = { rom, core, goalieMode: "manual_goalie", matchId: tournamentId };
+  const matchState = { rom, core, goalieMode: "manual", matchId: tournamentId };
   await saveMatchState(tournamentId, matchState);
   io.to(tournamentId).emit("matchStart", matchState);
   res.send("Match start emitted");
@@ -278,26 +278,29 @@ app.post("/api/create-checkout-session", async (req, res) => {
     });
   }
 });
-// TEMP: seed a scheduled tournament (remove after testing)
-app.post("/admin/seed-tournament", async (_req, res) => {
+// Create a tournament (real route)
+app.post("/api/tournaments", async (req, res) => {
   try {
-    const start = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
+    const { id, name, game, goalieMode, periodLength, startTime } = req.body;
+
     const t = await Tournament.create({
-      id: `test-${Date.now()}`,   // required id field
-      name: "Test Cup",
-      game: "NHL 95",
-      goalieMode: "manual",
+      id,                       // required by schema
+      name,
+      game,
+      goalieMode,
+      periodLength,
       status: "scheduled",
-      startTime: start,
+      startTime: new Date(startTime),
+      registeredPlayers: []
     });
 
-    // Immediately schedule this tournament so no restart is needed
+    // Immediately schedule it
     scheduleTournamentStart(t, io);
 
-    res.json({ ok: true, id: t.id, mongoId: t._id.toString(), startTime: start });
+    res.json({ ok: true, id: t.id, mongoId: t._id.toString(), startTime: t.startTime });
   } catch (err) {
-    console.error("Seed error:", err);
-    res.status(500).json({ error: err.message, stack: err.stack });
+    console.error("Tournament creation error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 // ✅ Server start (always last, outside of routes)
