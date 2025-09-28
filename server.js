@@ -15,7 +15,7 @@ const Player = require('./models/Player');
 const Tournament = require('./models/Tournament');
 
 // Scheduler
-const { scheduleAllTournaments } = require('./scheduler/tournaments');
+const { scheduleAllTournaments, scheduleTournamentStart } = require('./scheduler/tournaments');
 
 if (!process.env.STRIPE_SECRET_KEY) {
   console.error('❌ STRIPE_SECRET_KEY is missing from environment');
