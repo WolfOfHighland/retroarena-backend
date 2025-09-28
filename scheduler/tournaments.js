@@ -11,14 +11,18 @@ function buildPayload(t) {
     rom: t.game === "NHL 95" ? "NHL_95.bin" : "NHL_94.bin",
     core: "genesis_plus_gx",
     goalieMode: t.goalieMode === "manual" ? "manual_goalie" : "auto_goalie",
-    matchId: t.id,
+    matchId: t._id.toString(), // always safe, guaranteed by Mongoose
   };
 }
 
 // Schedule all tournaments on boot
 async function scheduleAllTournaments(io) {
-  const upcoming = await Tournament.find({ status: "scheduled" });
-  upcoming.forEach((t) => scheduleTournamentStart(t, io));
+  try {
+    const upcoming = await Tournament.find({ status: "scheduled" });
+    upcoming.forEach((t) => scheduleTournamentStart(t, io));
+  } catch (err) {
+    console.error("⚠️ Failed to fetch tournaments:", err.message);
+  }
 }
 
 // Schedule a single tournament
@@ -26,17 +30,26 @@ function scheduleTournamentStart(t, io) {
   const delay = msUntil(t.startTime);
   const payload = buildPayload(t);
 
+  if (delay <= 0) {
+    console.log(`⚠️ Tournament "${t.name}" has a past startTime, skipping`);
+    return;
+  }
+
   console.log(`⏰ Scheduling "${t.name}" for ${t.startTime} (delay ${delay}ms)`);
 
   setTimeout(async () => {
-    const fresh = await Tournament.findOne({ id: t.id });
-    if (!fresh || fresh.status !== "scheduled") return;
+    try {
+      const fresh = await Tournament.findById(t._id);
+      if (!fresh || fresh.status !== "scheduled") return;
 
-    fresh.status = "live";
-    await fresh.save();
+      fresh.status = "live";
+      await fresh.save();
 
-    io.to(t.id).emit("matchStart", payload);
-    console.log(`🚨 Emitted matchStart for "${t.name}"`);
+      io.to(t._id.toString()).emit("matchStart", payload);
+      console.log(`🚨 Emitted matchStart for "${t.name}"`);
+    } catch (err) {
+      console.error(`⚠️ Failed to start tournament "${t.name}":`, err.message);
+    }
   }, delay);
 }
 
