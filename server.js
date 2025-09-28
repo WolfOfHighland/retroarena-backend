@@ -281,19 +281,20 @@ app.post("/api/create-checkout-session", async (req, res) => {
 // TEMP: seed a scheduled tournament (remove after testing)
 app.post("/admin/seed-tournament", async (_req, res) => {
   try {
-    const start = new Date(Date.now() + 60 * 1000); // 1 minute from now
-    const t = await Tournament.create({
-      id: `test-${Date.now()}`,   // ✅ add required id field
-      name: "Test Cup",
-      game: "NHL 95",
-      goalieMode: "manual",
-      status: "scheduled",
-      startTime: start,
-    });
-    res.json({ ok: true, id: t.id, mongoId: t._id.toString(), startTime: start });
-  } catch (err) {
-    console.error("Seed error:", err);
-    res.status(500).json({ error: err.message, stack: err.stack });
+    const start = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes from now
+const t = await Tournament.create({
+  id: `test-${Date.now()}`,   // ✅ required id field
+  name: "Test Cup",
+  game: "NHL 95",
+  goalieMode: "manual",
+  status: "scheduled",
+  startTime: start,
+});
+
+// Immediately schedule this tournament so no restart is needed
+scheduleTournamentStart(t, io);
+
+res.json({ ok: true, id: t.id, mongoId: t._id.toString(), startTime: start });
   }
 });
 // ✅ Server start (always last, outside of routes)
