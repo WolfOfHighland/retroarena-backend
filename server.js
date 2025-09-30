@@ -59,7 +59,10 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
 });
 
 // --- Middleware ---
-app.use(cors());
+app.use(cors({
+  origin: "https://retrorumblearena.com", // your Vercel frontend domain
+  credentials: true,
+}));
 app.use(express.json());
 
 // --- API logger ---
@@ -312,6 +315,7 @@ app.post("/sit-n-go/join", (req, res) => {
 
   // Add player to queue
   sitngoQueue.push({ username, email });
+  console.log(`📥 Sit-n-Go join received: ${username} (${email}) — queue length: ${sitngoQueue.length}`);
 
   // If two players are in the queue, start a match
   if (sitngoQueue.length >= 2) {
@@ -325,7 +329,6 @@ app.post("/sit-n-go/join", (req, res) => {
       players: [p1, p2],
     };
 
-    // Emit to both players' rooms (using email as room key)
     io.to(p1.email).emit("matchStart", matchData);
     io.to(p2.email).emit("matchStart", matchData);
 
