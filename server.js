@@ -301,6 +301,40 @@ app.post("/api/create-checkout-session", async (req, res) => {
     });
   }
 });
+// In server.js or routes/sitngo.js
+let sitngoQueue = [];
+
+app.post("/sit-n-go/join", (req, res) => {
+  const { username, email } = req.body;
+  if (!username || !email) {
+    return res.status(400).json({ error: "Missing username or email" });
+  }
+
+  // Add player to queue
+  sitngoQueue.push({ username, email });
+
+  // If two players are in the queue, start a match
+  if (sitngoQueue.length >= 2) {
+    const [p1, p2] = sitngoQueue.splice(0, 2);
+
+    const matchData = {
+      rom: "NHL_95.bin",
+      core: "genesis_plus_gx",
+      goalieMode: "manual_goalie",
+      matchId: `sitngo-${Date.now()}`,
+      players: [p1, p2],
+    };
+
+    // Emit to both players' rooms (using email as room key)
+    io.to(p1.email).emit("matchStart", matchData);
+    io.to(p2.email).emit("matchStart", matchData);
+
+    console.log(`⚡ Sit-n-Go match started: ${p1.username} vs ${p2.username}`);
+  }
+
+  res.json({ status: "queued" });
+});
+
 // Create a tournament (real route)
 app.post("/api/tournaments", async (req, res) => {
   try {
