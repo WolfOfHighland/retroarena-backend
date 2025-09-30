@@ -60,7 +60,10 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
 
 // --- Middleware ---
 app.use(cors({
-  origin: "https://retrorumblearena.com", // your Vercel frontend domain
+  origin: [
+    "https://retrorumblearena.com",          // your custom domain
+    /\.vercel\.app$/                         // any Vercel preview deployment
+  ],
   credentials: true,
 }));
 app.use(express.json());
