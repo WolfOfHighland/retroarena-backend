@@ -61,8 +61,9 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
 // --- Middleware ---
 app.use(cors({
   origin: [
-    "https://retrorumblearena.com",          // your custom domain
-    /\.vercel\.app$/                         // any Vercel preview deployment
+    "https://retrorumblearena.com",   // production
+    /\.vercel\.app$/,                 // any Vercel preview deployment
+    "http://localhost:3000"           // local dev
   ],
   credentials: true,
 }));
