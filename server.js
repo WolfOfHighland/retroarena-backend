@@ -309,63 +309,53 @@ app.post("/api/create-checkout-session", async (req, res) => {
     });
   }
 });
-// In server.js or routes/sitngo.js
-let sitngoQueue = [];
-
-app.post("/sit-n-go/join", (req, res) => {
+app.post("/sit-n-go/join", async (req, res) => {
   const { username, email } = req.body;
   if (!username || !email) {
     return res.status(400).json({ error: "Missing username or email" });
   }
 
-  // Add player to queue
-  sitngoQueue.push({ username, email });
-  console.log(`📥 Sit-n-Go join received: ${username} (${email}) — queue length: ${sitngoQueue.length}`);
-
-  // If two players are in the queue, start a match
-  if (sitngoQueue.length >= 2) {
-    const [p1, p2] = sitngoQueue.splice(0, 2);
-
-    const matchData = {
-      rom: "NHL_95.bin",
-      core: "genesis_plus_gx",
-      goalieMode: "manual_goalie",
-      matchId: `sitngo-${Date.now()}`,
-      players: [p1, p2],
-    };
-
-    io.to(p1.email).emit("matchStart", matchData);
-    io.to(p2.email).emit("matchStart", matchData);
-
-    console.log(`⚡ Sit-n-Go match started: ${p1.username} vs ${p2.username}`);
-  }
-
-  res.json({ status: "queued" });
-});
-
-// Create a tournament (real route)
-app.post("/api/tournaments", async (req, res) => {
   try {
-    const { id, name, game, goalieMode, periodLength, startTime } = req.body;
+    await redis.rPush("sitngoQueue", JSON.stringify({ username, email }));
+    const queueLength = await redis.lLen("sitngoQueue");
+    console.log(`📥 Sit-n-Go join received: ${username} (${email}) — queue length: ${queueLength}`);
 
-    const t = await Tournament.create({
-      id,                       // required by schema
-      name,
-      game,
-      goalieMode,
-      periodLength,
-      status: "scheduled",
-      startTime: new Date(startTime),
-      registeredPlayers: []
-    });
+    if (queueLength >= 2) {
+      const [p1Raw, p2Raw] = await redis.lPopCount("sitngoQueue", 2);
+      if (p1Raw && p2Raw) {
+        const p1 = JSON.parse(p1Raw);
+        const p2 = JSON.parse(p2Raw);
 
-    // Immediately schedule it
-    scheduleTournamentStart(t, io);
+        const matchData = {
+          rom: "NHL_95.bin",
+          core: "genesis_plus_gx",
+          goalieMode: "manual_goalie",
+          matchId: `sitngo-${Date.now()}`,
+          players: [p1, p2],
+        };
 
-    res.json({ ok: true, id: t.id, mongoId: t._id.toString(), startTime: t.startTime });
+        io.to(p1.email).emit("matchStart", matchData);
+        io.to(p2.email).emit("matchStart", matchData);
+
+        console.log(`⚡ Sit-n-Go match started: ${p1.username} vs ${p2.username}`);
+        return res.json({ status: "matched", matchId: matchData.matchId });
+      }
+    }
+
+    res.json({ status: "queued" });
   } catch (err) {
-    console.error("Tournament creation error:", err);
-    res.status(500).json({ error: err.message });
+    console.error("❌ Sit-n-Go Redis error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+// --- Sit-n-Go status route ---
+app.get("/sit-n-go/status", async (req, res) => {
+  try {
+    const queueLength = await redis.lLen("sitngoQueue");
+    res.json({ queueLength });
+  } catch (err) {
+    console.error("❌ Sit-n-Go status error:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 // ✅ Server start (always last, outside of routes)
