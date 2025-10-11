@@ -254,17 +254,19 @@ app.post("/test-room", (req, res) => {
 
 app.post("/start-match", async (req, res) => {
   const { tournamentId, rom, core } = req.body;
+
   if (!tournamentId || !rom || !core) {
     return res.status(400).json({ error: "Missing tournamentId, rom, or core" });
   }
 
   try {
     const tournament = await Tournament.findOne({ id: tournamentId });
+
     if (!tournament) {
       return res.status(404).json({ error: "Tournament not found" });
     }
 
-        const matchState = {
+    const matchState = {
       rom,
       core,
       goalieMode: tournament.goalieMode || "manual",
@@ -275,9 +277,20 @@ app.post("/start-match", async (req, res) => {
     await saveMatchState(tournamentId, matchState);
     io.to(tournamentId).emit("matchStart", matchState);
 
-    res.json({ ok: true, message: "Match start emitted", matchState });
+    return res.status(200).json({
+      ok: true,
+      message: "Match start emitted",
+      matchState,
+    });
   } catch (err) {
     console.error("❌ start-match error:", err);
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Internal server error" });
   }
+});
+
+
+// ✅ REQUIRED FOR RENDER TO DETECT OPEN PORT
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`🚀 Server listening on port ${PORT}`);
 });
