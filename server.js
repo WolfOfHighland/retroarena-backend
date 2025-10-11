@@ -155,8 +155,10 @@ async function loadMatchState(matchId) {
 }
 
 // ✅ Route wiring
+const matchRoutes = require('./routes/match');
 const sitngoRoutes = require('./routes/sit-n-go');
 const tournamentRoutes = require('./routes/tournaments');
+app.use('/api', matchRoutes);
 app.use('/api/sit-n-go', sitngoRoutes);
 app.use('/api/tournaments', tournamentRoutes);
 
