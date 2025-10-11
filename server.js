@@ -264,7 +264,7 @@ app.post("/start-match", async (req, res) => {
       return res.status(404).json({ error: "Tournament not found" });
     }
 
-    const matchState = {
+        const matchState = {
       rom,
       core,
       goalieMode: tournament.goalieMode || "manual",
