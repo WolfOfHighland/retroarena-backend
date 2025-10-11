@@ -42,7 +42,12 @@ router.post('/start-match', async (req, res) => {
       matchState,
     });
   } catch (err) {
-    console.error("❌ start-match error:", err);
+    console.error("❌ start-match error:", {
+      message: err.message,
+      stack: err.stack,
+      name: err.name,
+      cause: err.cause,
+    });
     return res.status(500).json({ error: "Internal server error" });
   }
 });
