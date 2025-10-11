@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Tournament = require('../models/Tournament');
-const { saveMatchState } = require('../utils/matchState');
+const MatchState = require('../models/MatchState');
 const io = require('../server'); // imported from server.js
 
 // POST /api/start-match
@@ -33,7 +33,7 @@ router.post('/start-match', async (req, res) => {
 
     console.log("✅ Match state:", matchState);
 
-    await saveMatchState(tournamentId, matchState);
+    await MatchState.create(matchState);
     io.to(tournamentId).emit("matchStart", matchState);
 
     return res.status(200).json({
