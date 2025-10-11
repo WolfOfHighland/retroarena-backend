@@ -1,4 +1,3 @@
-// retrorumble-backend/scheduler/tournaments.js
 const Tournament = require("../models/Tournament");
 
 // In-memory registry: tournamentId -> timeout
@@ -45,7 +44,6 @@ function scheduleTournamentStart(t, io) {
     return;
   }
 
-  // Avoid double scheduling
   clearTimer(t._id.toString());
 
   const delay = msUntil(t.startTime);
@@ -60,7 +58,6 @@ function scheduleTournamentStart(t, io) {
 
   const timeout = setTimeout(async () => {
     try {
-      // Re-fetch to ensure status hasn’t changed
       const fresh = await Tournament.findById(t._id);
       if (!fresh) {
         console.warn(`⚠️ Tournament ${t._id} not found at start time, aborting`);
@@ -71,23 +68,18 @@ function scheduleTournamentStart(t, io) {
         return;
       }
 
-      // Flip to live, persist
       fresh.status = "live";
       await fresh.save();
 
-      // Emit matchStart to room keyed by tournament ID
-      io.to(fresh._id.toString()).emit("matchStart", payload);
+      io.to(fresh._id.toString()).emit("matchStart", buildPayload(fresh));
       console.log(`🚨 Emitted matchStart for "${fresh.name}" (${fresh._id})`);
-
     } catch (err) {
       console.error(`⚠️ Failed to start tournament "${t.name}":`, err.message);
     } finally {
-      // Clean registry
       clearTimer(t._id.toString());
     }
   }, delay);
 
-  // Track timer
   timers.set(t._id.toString(), timeout);
 }
 
@@ -102,7 +94,7 @@ async function scheduleAllTournaments(io) {
   }
 }
 
-// Optional helper: reschedule one by ID (e.g., after an admin edits startTime)
+// Optional helper: reschedule one by ID
 async function rescheduleTournamentById(tournamentId, io) {
   try {
     const t = await Tournament.findById(tournamentId);
@@ -120,8 +112,59 @@ async function rescheduleTournamentById(tournamentId, io) {
   }
 }
 
+// 🔁 Watch Sit‑n‑Go tables and emit matchStart when full
+async function watchSitNGoTables(io) {
+  console.log('👀 Watching Sit‑n‑Go tables…');
+
+  setInterval(async () => {
+    try {
+      const sitngos = await Tournament.find({
+        startTime: null,
+        status: 'scheduled',
+      });
+
+      for (const t of sitngos) {
+        const registered = Array.isArray(t.registeredPlayers)
+          ? t.registeredPlayers.length
+          : 0;
+
+        if (registered >= t.maxPlayers) {
+          console.log(`🚨 Sit‑n‑Go "${t.name}" is full (${registered}/${t.maxPlayers})`);
+
+          t.status = 'live';
+          await t.save();
+
+          io.to(t._id.toString()).emit('matchStart', buildPayload(t));
+          console.log(`🚀 Emitted matchStart for Sit‑n‑Go "${t.name}" (${t._id})`);
+
+          const clone = new Tournament({
+            id: `${t.id}-clone-${Date.now()}`,
+            name: t.name,
+            startTime: null,
+            game: t.game,
+            goalieMode: t.goalieMode,
+            elimination: t.elimination,
+            maxPlayers: t.maxPlayers,
+            entryFee: t.entryFee,
+            prizeType: t.prizeType,
+            prizeAmount: 0,
+            registeredPlayers: [],
+            status: 'scheduled',
+          });
+
+          await clone.save();
+          console.log(`🔁 Respawned Sit‑n‑Go: ${clone.name} (${clone._id})`);
+        }
+      }
+    } catch (err) {
+      console.error('⚠️ Sit‑n‑Go watcher error:', err.message);
+    }
+  }, 3000);
+}
+
 module.exports = {
   scheduleAllTournaments,
   scheduleTournamentStart,
   rescheduleTournamentById,
+  watchSitNGoTables,
 };

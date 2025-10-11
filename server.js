@@ -15,22 +15,91 @@ const Player = require('./models/Player');
 const Tournament = require('./models/Tournament');
 
 // Scheduler
-const { scheduleAllTournaments, scheduleTournamentStart } = require('./scheduler/tournaments');
+const {
+  scheduleAllTournaments,
+  scheduleTournamentStart,
+  watchSitNGoTables,
+} = require('./scheduler/tournaments');
 
+// Express setup
+const app = express();
+app.use(cors({
+  origin: [
+    "https://retrorumblearena.com",
+    "https://www.retrorumblearena.com",
+    /\.vercel\.app$/,
+    "http://localhost:3000"
+  ],
+  credentials: true,
+}));
+app.use(express.json());
+
+// API logger
+app.use('/api', (req, _res, next) => {
+  console.log(`➡️ API ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+// Health checks
+app.get("/", (_req, res) => res.send("Retro Rumble Arena backend is live 🐺"));
+app.get("/api/ping", (_req, res) => res.send("pong"));
+app.get("/ping", (_req, res) => res.send("pong"));
+
+// HTTP + Socket.IO setup
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
+  },
+});
+module.exports.io = io;
+
+// Redis setup
+let redis;
+if (process.env.REDIS_URL) {
+  const pubClient = createClient({ url: process.env.REDIS_URL });
+  const subClient = pubClient.duplicate();
+  redis = pubClient;
+
+  (async () => {
+    try {
+      await pubClient.connect();
+      await subClient.connect();
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log('🔌 Redis adapter connected');
+    } catch (err) {
+      console.error('⚠️ Redis failed — continuing without adapter:', err.message);
+    }
+  })();
+} else {
+  console.log('⚠️ No REDIS_URL provided — skipping Redis adapter');
+}
+
+// MongoDB setup
+if (process.env.MONGO_URI) {
+  mongoose.connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  }).then(() => {
+    console.log('✅ Connected to MongoDB');
+    scheduleAllTournaments(io);
+    watchSitNGoTables(io);
+  }).catch((err) => {
+    console.error('⚠️ MongoDB connection failed:', err.message);
+  });
+} else {
+  console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
+}
+
+// Stripe key check
 if (!process.env.STRIPE_SECRET_KEY) {
   console.error('❌ STRIPE_SECRET_KEY is missing from environment');
 } else {
   console.log(`🔐 Stripe key loaded: ${process.env.STRIPE_SECRET_KEY.slice(0, 10)}...`);
 }
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
-});
-module.exports.io = io; // export io for scheduler
-
-// --- Stripe webhook (raw body required) ---
+// Stripe webhook
 app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
@@ -58,62 +127,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   res.status(200).send();
 });
 
-// --- Middleware ---
-app.use(cors({
-  origin: [
-    "https://retrorumblearena.com",
-    "https://www.retrorumblearena.com",
-    /\.vercel\.app$/,                   // Vercel previews
-    "http://localhost:3000"             // local dev
-  ],
-  credentials: true,
-}));
-app.use(express.json());
-
-// --- API logger ---
-app.use('/api', (req, _res, next) => {
-  console.log(`➡️ API ${req.method} ${req.originalUrl}`);
-  next();
-});
-
-// --- Health checks ---
-app.get("/", (_req, res) => res.send("Retro Rumble Arena backend is live 🐺"));
-app.get("/api/ping", (_req, res) => res.send("pong"));
-app.get("/ping", (_req, res) => res.send("pong"));
-
-// --- Redis setup ---
-let redis;
-if (process.env.REDIS_URL) {
-  const pubClient = createClient({ url: process.env.REDIS_URL });
-  const subClient = pubClient.duplicate();
-  redis = pubClient;
-
-  (async () => {
-    try {
-      await pubClient.connect();
-      await subClient.connect();
-      io.adapter(createAdapter(pubClient, subClient));
-      console.log('🔌 Redis adapter connected');
-    } catch (err) {
-      console.error('⚠️ Redis failed — continuing without adapter:', err.message);
-    }
-  })();
-} else {
-  console.log('⚠️ No REDIS_URL provided — skipping Redis adapter');
-}
-
-// --- MongoDB setup ---
-if (process.env.MONGO_URI) {
-  mongoose.connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  }).then(() => console.log('✅ Connected to MongoDB'))
-    .catch((err) => console.error('⚠️ MongoDB connection failed:', err.message));
-} else {
-  console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
-}
-
-// --- Redis helpers ---
+// Redis helpers
 async function saveMatchState(matchId, state) {
   if (!redis) return;
   try {
@@ -140,7 +154,13 @@ async function loadMatchState(matchId) {
   }
 }
 
-// --- Socket.IO handlers ---
+// ✅ Route wiring
+const sitngoRoutes = require('./routes/sit-n-go');
+const tournamentRoutes = require('./routes/tournaments');
+app.use('/sit-n-go', sitngoRoutes);
+app.use('/tournaments', tournamentRoutes);
+
+// Socket.IO handlers
 io.on('connection', (socket) => {
   console.log(`✅ Socket connected: ${socket.id}`);
 
@@ -177,8 +197,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// --- Routes ---
-// Register player
+// Custom routes
 app.post('/register-player', async (req, res) => {
   const { username, email, country, socketId } = req.body;
   console.log('📨 Incoming registration payload:', req.body);
@@ -227,14 +246,12 @@ app.post('/register-player', async (req, res) => {
   }
 });
 
-// Test room emit
 app.post("/test-room", (req, res) => {
   const { room } = req.body;
   io.to(room).emit("registrationConfirmed", { username: "WolfTest", status: "new" });
   res.send("Emit sent");
 });
 
-// Start match
 app.post("/start-match", async (req, res) => {
   const { tournamentId, rom, core } = req.body;
   if (!tournamentId || !rom || !core) {
@@ -242,148 +259,25 @@ app.post("/start-match", async (req, res) => {
   }
 
   try {
-    // Look up the tournament in Mongo
     const tournament = await Tournament.findOne({ id: tournamentId });
     if (!tournament) {
       return res.status(404).json({ error: "Tournament not found" });
     }
 
-    // Build match state using tournament settings
     const matchState = {
       rom,
       core,
-      goalieMode: tournament.goalieMode || "manual", // fallback to manual
-      periodLength: tournament.periodLength,         // include other rules if needed
+      goalieMode: tournament.goalieMode || "manual",
+      periodLength: tournament.periodLength || 5,
       matchId: tournamentId,
     };
 
-    // Persist match state
     await saveMatchState(tournamentId, matchState);
-
-    // Emit to all clients in this tournament room
     io.to(tournamentId).emit("matchStart", matchState);
 
     res.json({ ok: true, message: "Match start emitted", matchState });
   } catch (err) {
     console.error("❌ start-match error:", err);
     res.status(500).json({ error: err.message });
-  }
-});
-
-// Stripe checkout session
-app.post("/api/create-checkout-session", async (req, res) => {
-  const { matchId, entryFee, gameName } = req.body;
-  if (!matchId || !entryFee || !gameName) {
-    return res.status(400).json({ error: "Missing matchId, entryFee, or gameName" });
-  }
-
-  try {
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: { name: `${gameName} Entry` },
-            unit_amount: entryFee * 100,
-          },
-          quantity: 1,
-        },
-      ],
-      mode: "payment",
-      success_url: `https://retrorumblearena.com/success?matchId=${matchId}`,
-      cancel_url: `https://retrorumblearena.com/cancel`,
-    });
-
-    console.log(`🧾 Stripe session created: ${session.id}`);
-    return res.json({ url: session.url });
-  } catch (err) {
-    console.error("❌ Stripe session error triggered");
-    console.error("❌ Stripe session error details:", {
-      message: err.message,
-      type: err.type,
-      code: err.code,
-      param: err.param,
-      raw: err.raw,
-    });
-
-    return res.status(500).json({
-      error: "Stripe session creation failed",
-      details: err.message,
-    });
-  }
-});
-
-// Sit-n-Go join
-app.post("/sit-n-go/join", async (req, res) => {
-  const { username, email } = req.body;
-  if (!username || !email) {
-    return res.status(400).json({ error: "Missing username or email" });
-  }
-
-  try {
-    await redis.rPush("sitngoQueue", JSON.stringify({ username, email }));
-    const queueLength = await redis.lLen("sitngoQueue");
-    console.log(`📥 Sit-n-Go join received: ${username} (${email}) — queue length: ${queueLength}`);
-
-    if (queueLength >= 2) {
-      const [p1Raw, p2Raw] = await redis.lPopCount("sitngoQueue", 2);
-      if (p1Raw && p2Raw) {
-        const p1 = JSON.parse(p1Raw);
-        const p2 = JSON.parse(p2Raw);
-
-        const matchData = {
-          rom: "NHL_95.bin",
-          core: "genesis_plus_gx",
-          goalieMode: "manual_goalie",
-          matchId: `sitngo-${Date.now()}`,
-          players: [p1, p2],
-        };
-
-        io.to(p1.email).emit("matchStart", matchData);
-        io.to(p2.email).emit("matchStart", matchData);
-
-        console.log(`⚡ Sit-n-Go match started: ${p1.username} vs ${p2.username}`);
-        return res.json({ status: "matched", matchId: matchData.matchId });
-      }
-    }
-
-    res.json({ status: "queued" });
-  } catch (err) {
-    console.error("❌ Sit-n-Go Redis error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// Sit-n-Go status
-app.get("/sit-n-go/status", async (_req, res) => {
-  try {
-    const queueLength = await redis.lLen("sitngoQueue");
-    res.json({ queueLength });
-  } catch (err) {
-    console.error("❌ Sit-n-Go status error:", err);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// --- Tournament API (fix for "Cannot GET /api/tournaments") ---
-app.get("/api/tournaments", async (_req, res) => {
-  try {
-    const tournaments = await Tournament.find({});
-    res.json(tournaments);
-  } catch (err) {
-    console.error("❌ Failed to fetch tournaments:", err);
-    res.status(500).json({ error: "Failed to fetch tournaments" });
-  }
-});
-
-// ✅ Server start (always last, outside of routes)
-const PORT = process.env.PORT || 10000;
-server.listen(PORT, async () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
-  try {
-    await scheduleAllTournaments(io); // pass io into scheduler
-  } catch (err) {
-    console.error("⚠️ Failed to schedule tournaments:", err.message);
   }
 });

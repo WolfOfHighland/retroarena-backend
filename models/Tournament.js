@@ -1,23 +1,20 @@
 const mongoose = require("mongoose");
 
-const RegisteredPlayerSchema = new mongoose.Schema({
-  playerId: { type: String, required: true },
-  username: { type: String, required: true },
-  paid: { type: Boolean, default: false },
-  socketId: { type: String },
-});
-
-// models/Tournament.js
 const TournamentSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true },
-  startTime: { type: Date, required: true },
-  game: { type: String, enum: ["NHL 94", "NHL 95"], required: true },
-  goalieMode: { type: String, enum: ["manual", "auto"], required: true },
+  startTime: { type: Date },
+  game: { type: String, default: "NHL 95" },
+  goalieMode: { type: String, enum: ["manual", "auto"], default: "manual" },
   periodLength: { type: Number, default: 5 },
-  registeredPlayers: { type: [RegisteredPlayerSchema], default: [] },
-  status: { type: String, enum: ["scheduled", "live", "completed"], default: "scheduled" },
-  entryFee: { type: Number, required: true }, // 👈 new field
+  status: { type: String, default: "scheduled" },
+  registeredPlayers: { type: Array, default: [] },
+  entryFee: { type: Number, default: 0 },
+  prizeType: { type: String, enum: ["guaranteed", "dynamic"], default: "dynamic" },
+  prizeAmount: { type: Number, default: 0 },
+
+  // 👇 Add this
+  elimination: { type: String, enum: ["single", "double"], default: "single" },
 });
 
 module.exports = mongoose.model("Tournament", TournamentSchema);
