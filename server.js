@@ -157,8 +157,8 @@ async function loadMatchState(matchId) {
 // ✅ Route wiring
 const sitngoRoutes = require('./routes/sit-n-go');
 const tournamentRoutes = require('./routes/tournaments');
-app.use('/sit-n-go', sitngoRoutes);
-app.use('/tournaments', tournamentRoutes);
+app.use('/api/sit-n-go', sitngoRoutes);
+app.use('/api/tournaments', tournamentRoutes);
 
 // Socket.IO handlers
 io.on('connection', (socket) => {
