@@ -7,6 +7,10 @@ router.post('/join/:tournamentId', async (req, res) => {
   const { tournamentId } = req.params;
   const { playerId } = req.body;
 
+  if (!playerId || typeof playerId !== 'string') {
+    return res.status(400).json({ error: 'Missing or invalid playerId' });
+  }
+
   try {
     const tournament = await Tournament.findOne({ id: tournamentId });
 
@@ -16,6 +20,10 @@ router.post('/join/:tournamentId', async (req, res) => {
 
     if (tournament.startTime !== null) {
       return res.status(400).json({ error: 'This is not a Sit‑n‑Go tournament' });
+    }
+
+    if (!Array.isArray(tournament.registeredPlayers)) {
+      tournament.registeredPlayers = [];
     }
 
     if (tournament.registeredPlayers.includes(playerId)) {
