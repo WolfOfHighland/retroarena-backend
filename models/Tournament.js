@@ -7,6 +7,7 @@ const RegisteredPlayerSchema = new mongoose.Schema({
   socketId: { type: String },
 });
 
+// models/Tournament.js
 const TournamentSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true },
@@ -16,6 +17,7 @@ const TournamentSchema = new mongoose.Schema({
   periodLength: { type: Number, default: 5 },
   registeredPlayers: { type: [RegisteredPlayerSchema], default: [] },
   status: { type: String, enum: ["scheduled", "live", "completed"], default: "scheduled" },
+  entryFee: { type: Number, required: true }, // 👈 new field
 });
 
 module.exports = mongoose.model("Tournament", TournamentSchema);
