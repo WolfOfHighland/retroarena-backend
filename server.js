@@ -62,7 +62,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
 app.use(cors({
   origin: [
     "https://retrorumblearena.com",
-    "https://www.retrorumblearena.com", // add this
+    "https://www.retrorumblearena.com",
     /\.vercel\.app$/,                   // Vercel previews
     "http://localhost:3000"             // local dev
   ],
@@ -178,6 +178,7 @@ io.on('connection', (socket) => {
 });
 
 // --- Routes ---
+// Register player
 app.post('/register-player', async (req, res) => {
   const { username, email, country, socketId } = req.body;
   console.log('📨 Incoming registration payload:', req.body);
@@ -226,12 +227,14 @@ app.post('/register-player', async (req, res) => {
   }
 });
 
+// Test room emit
 app.post("/test-room", (req, res) => {
   const { room } = req.body;
   io.to(room).emit("registrationConfirmed", { username: "WolfTest", status: "new" });
   res.send("Emit sent");
 });
 
+// Start match
 app.post("/start-match", async (req, res) => {
   const { tournamentId, rom, core } = req.body;
   if (!tournamentId || !rom || !core) {
@@ -254,7 +257,7 @@ app.post("/start-match", async (req, res) => {
       matchId: tournamentId,
     };
 
-    // Persist match state (make sure saveMatchState is imported/defined)
+    // Persist match state
     await saveMatchState(tournamentId, matchState);
 
     // Emit to all clients in this tournament room
@@ -267,6 +270,7 @@ app.post("/start-match", async (req, res) => {
   }
 });
 
+// Stripe checkout session
 app.post("/api/create-checkout-session", async (req, res) => {
   const { matchId, entryFee, gameName } = req.body;
   if (!matchId || !entryFee || !gameName) {
@@ -309,6 +313,8 @@ app.post("/api/create-checkout-session", async (req, res) => {
     });
   }
 });
+
+// Sit-n-Go join
 app.post("/sit-n-go/join", async (req, res) => {
   const { username, email } = req.body;
   if (!username || !email) {
@@ -348,8 +354,9 @@ app.post("/sit-n-go/join", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-// --- Sit-n-Go status route ---
-app.get("/sit-n-go/status", async (req, res) => {
+
+// Sit-n-Go status
+app.get("/sit-n-go/status", async (_req, res) => {
   try {
     const queueLength = await redis.lLen("sitngoQueue");
     res.json({ queueLength });
@@ -358,6 +365,18 @@ app.get("/sit-n-go/status", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+// --- Tournament API (fix for "Cannot GET /api/tournaments") ---
+app.get("/api/tournaments", async (_req, res) => {
+  try {
+    const tournaments = await Tournament.find({});
+    res.json(tournaments);
+  } catch (err) {
+    console.error("❌ Failed to fetch tournaments:", err);
+    res.status(500).json({ error: "Failed to fetch tournaments" });
+  }
+});
+
 // ✅ Server start (always last, outside of routes)
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, async () => {
