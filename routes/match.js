@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Tournament = require('../models/Tournament');
 const { saveMatchState } = require('../utils/matchState');
-const io = require('../socket'); // adjust if your Socket.IO export is different
+const io = require('../server'); 
 
 // POST /api/start-match
 router.post('/start-match', async (req, res) => {
