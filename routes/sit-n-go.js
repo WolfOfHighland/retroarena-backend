@@ -5,13 +5,24 @@ const Tournament = require('../models/Tournament');
 // GET /api/sit-n-go
 router.get('/', async (req, res) => {
   try {
-    // TEMP: Remove all filters to confirm visibility
-    const tournaments = await Tournament.find({});
+    const tournaments = await Tournament.find({
+      type: 'sit-n-go',
+      status: 'scheduled'
+    });
 
-    console.log('🎯 Sit-n-Go route hit — found', tournaments.length);
-    console.log('🧪 Raw tournaments from DB:', tournaments);
+    const waiting = tournaments
+      .filter(t => (t.registeredPlayers?.length || 0) < (t.maxPlayers || 4))
+      .slice(0, 3);
 
-    const enriched = tournaments.map(t => ({
+    console.log('🎯 Sit-n-Go route hit — returning 3 waiting tables');
+    console.log('🧪 Waiting Sit-n-Go tournaments:', waiting.map(t => ({
+      id: t.id,
+      name: t.name,
+      registered: t.registeredPlayers?.length || 0,
+      max: t.maxPlayers || 4
+    })));
+
+    const enriched = waiting.map(t => ({
       id: t.id || t._id.toString(),
       name: t.name,
       entryFee: t.entryFee,
@@ -22,8 +33,7 @@ router.get('/', async (req, res) => {
       goalieMode: t.goalieMode,
       elimination: t.elimination,
       maxPlayers: Number(t.maxPlayers || 4),
-      status: t.status || 'unknown',
-      type: t.type || 'unknown',
+      status: t.status || 'scheduled',
     }));
 
     res.status(200).json(enriched);
