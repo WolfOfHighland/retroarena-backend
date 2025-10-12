@@ -40,4 +40,23 @@ router.post('/join/:tournamentId', async (req, res) => {
   }
 });
 
+// GET /api/sitngo
+router.get('/api/sitngo', async (req, res) => {
+  try {
+    const tournaments = await Tournament.find({
+      startTime: null // identifies Sit-n-Go tournaments
+    });
+
+    const enriched = tournaments.map(t => ({
+      ...t.toObject(),
+      type: 'sitngo'
+    }));
+
+    return res.status(200).json(enriched);
+  } catch (err) {
+    console.error('❌ Sit‑n‑Go fetch error:', err.message);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;
