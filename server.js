@@ -39,7 +39,7 @@ app.use('/api', (req, _res, next) => {
   console.log(`➡️ API ${req.method} ${req.originalUrl}`);
   next();
 });
-
+app.use('/api/sit-n-go', require('./routes/sit-n-go'));
 // Health checks
 app.get("/", (_req, res) => res.send("Retro Rumble Arena backend is live 🐺"));
 app.get("/api/ping", (_req, res) => res.send("pong"));
