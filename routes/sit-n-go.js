@@ -40,16 +40,26 @@ router.post('/join/:tournamentId', async (req, res) => {
   }
 });
 
-// GET /api/sitngo
-router.get('/api/sit-n-go', async (req, res) => {
+// GET /api/sit-n-go
+router.get('/', async (req, res) => {
   try {
     const tournaments = await Tournament.find({
-      startTime: null // identifies Sit-n-Go tournaments
+      startTime: null,
+      status: 'scheduled',
+      type: 'sit-n-go',
     });
 
     const enriched = tournaments.map(t => ({
-      ...t.toObject(),
-      type: 'sitngo'
+      id: t._id.toString(),
+      name: t.name,
+      entryFee: t.entryFee,
+      registeredPlayers: t.registeredPlayers || [],
+      prizeType: t.prizeType,
+      prizeAmount: t.prizeAmount,
+      game: t.game,
+      goalieMode: t.goalieMode,
+      elimination: t.elimination,
+      maxPlayers: t.maxPlayers,
     }));
 
     return res.status(200).json(enriched);
