@@ -6,7 +6,9 @@ const Tournament = require('../models/Tournament');
 router.get('/', async (req, res) => {
   try {
     const tournaments = await Tournament.find({
-  });
+      status: 'scheduled',
+      type: 'sit-n-go',
+    });
 
     console.log(`🎯 Sit-n-Go route hit — found ${tournaments.length} tournaments`);
 
@@ -65,6 +67,24 @@ router.post('/join/:tournamentId', async (req, res) => {
   } catch (err) {
     console.error('❌ Sit-n-Go join error:', err.message);
     return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/sit-n-go/debug
+router.get('/debug', async (req, res) => {
+  try {
+    const tournaments = await Tournament.find({});
+    const summary = tournaments.map(t => ({
+      id: t.id || t._id.toString(),
+      type: t.type,
+      status: t.status,
+      startTime: t.startTime,
+    }));
+    console.log('🧪 DEBUG dump:', summary);
+    res.json(summary);
+  } catch (err) {
+    console.error('❌ DEBUG dump error:', err.message);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
