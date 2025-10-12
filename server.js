@@ -156,10 +156,12 @@ async function loadMatchState(matchId) {
 
 // ✅ Route wiring
 const matchRoutes = require('./routes/match');
-const sitngoRoutes = require('./routes/sit-n-go'); // Make sure this file injects `id` from `_id`
+const sitngoRoutes = require('./routes/sit-n-go');
 const tournamentRoutes = require('./routes/tournaments');
-app.use('/api', matchRoutes);
-app.use('/api/sit-n-go', sitngoRoutes);
+
+// ✅ Mount each route explicitly
+app.use('/api/match', matchRoutes);         // Now lives at /api/match/...
+app.use('/api/sit-n-go', sitngoRoutes);     // Lives at /api/sit-n-go
 app.use('/api/tournaments', tournamentRoutes);
 
 // Socket.IO handlers
