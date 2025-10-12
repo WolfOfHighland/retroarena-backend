@@ -150,7 +150,8 @@ async function watchSitNGoTables(io) {
             prizeAmount: 0,
             registeredPlayers: [],
             status: 'scheduled',
-          });
+            type: "sit-n-go",
+	});
 
           await clone.save();
           console.log(`🔁 Respawned Sit‑n‑Go: ${clone.name} (${clone._id})`);
