@@ -289,3 +289,7 @@ app.post("/start-match", async (req, res) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 });
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`🚀 Server listening on port ${PORT}`);
+});
