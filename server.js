@@ -156,7 +156,7 @@ async function loadMatchState(matchId) {
 
 // ✅ Route wiring
 const matchRoutes = require('./routes/match');
-const sitngoRoutes = require('./routes/sit-n-go');
+const sitngoRoutes = require('./routes/sit-n-go'); // Make sure this file injects `id` from `_id`
 const tournamentRoutes = require('./routes/tournaments');
 app.use('/api', matchRoutes);
 app.use('/api/sit-n-go', sitngoRoutes);
@@ -289,11 +289,3 @@ app.post("/start-match", async (req, res) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 });
-
-
-// ✅ REQUIRED FOR RENDER TO DETECT OPEN PORT
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`🚀 Server listening on port ${PORT}`);
-});
-module.exports = io;
