@@ -41,7 +41,7 @@ router.post('/join/:tournamentId', async (req, res) => {
 });
 
 // GET /api/sitngo
-router.get('/api/sitngo', async (req, res) => {
+router.get('/api/sit-n-go', async (req, res) => {
   try {
     const tournaments = await Tournament.find({
       startTime: null // identifies Sit-n-Go tournaments
