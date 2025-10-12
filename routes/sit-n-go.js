@@ -44,10 +44,7 @@ router.post('/join/:tournamentId', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const tournaments = await Tournament.find({
-      $or: [
-        { startTime: null },
-        { startTime: { $exists: false } }
-      ],
+      startTime: null,
       status: { $in: ['scheduled', 'pending', 'created'] },
       type: { $in: ['sit-n-go', 'sitngo'] },
     });
