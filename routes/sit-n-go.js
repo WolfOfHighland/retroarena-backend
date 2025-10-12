@@ -6,9 +6,7 @@ const Tournament = require('../models/Tournament');
 router.get('/', async (req, res) => {
   try {
     const tournaments = await Tournament.find({
-      status: 'scheduled',
-      type: 'sit-n-go',
-    });
+  });
 
     console.log(`🎯 Sit-n-Go route hit — found ${tournaments.length} tournaments`);
 
