@@ -7,8 +7,11 @@ router.get('/', async (req, res) => {
   try {
     const tournaments = await Tournament.find({
       type: 'sit-n-go',
-      status: { $in: ['scheduled', 'active'] } // include active matches
+      status: { $in: ['scheduled', 'active'] }
     });
+
+    console.log('🎯 Sit-n-Go route hit — found', tournaments.length);
+    console.log('🧪 Sit-n-Go tournaments:', tournaments);
 
     const enriched = tournaments.map(t => ({
       id: t.id || t._id.toString(),
@@ -49,7 +52,6 @@ router.post('/join/:tableId', async (req, res) => {
 
     tournament.registeredPlayers.push(playerId);
 
-    // Optional: auto-activate match when full
     if (tournament.registeredPlayers.length >= tournament.maxPlayers) {
       tournament.status = 'active';
     }
