@@ -45,12 +45,11 @@ router.get('/', async (req, res) => {
   try {
     const tournaments = await Tournament.find({
       startTime: null,
-      status: { $in: ['scheduled', 'pending', 'created'] },
-      type: { $in: ['sit-n-go', 'sitngo'] },
+      status: 'scheduled',
     });
 
     const enriched = tournaments.map(t => ({
-      id: t._id.toString(),
+      id: t.id || t._id.toString(),
       name: t.name,
       entryFee: t.entryFee,
       registeredPlayers: t.registeredPlayers || [],
@@ -59,7 +58,7 @@ router.get('/', async (req, res) => {
       game: t.game,
       goalieMode: t.goalieMode,
       elimination: t.elimination,
-      maxPlayers: Number(t.maxPlayers),
+      maxPlayers: Number(t.maxPlayers || 4), // fallback if missing
     }));
 
     return res.status(200).json(enriched);
