@@ -11,7 +11,7 @@ router.get('/', async (req, res) => {
     });
 
     const waiting = tournaments
-      .filter(t => (t.registeredPlayers?.length || 0) < (t.maxPlayers || 4))
+      .filter(t => (t.registeredPlayers?.length || 0) < Number(t.maxPlayers || 4))
       .slice(0, 3);
 
     console.log('🎯 Sit-n-Go route hit — returning 3 waiting tables');
@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
       id: t.id,
       name: t.name,
       registered: t.registeredPlayers?.length || 0,
-      max: t.maxPlayers || 4
+      max: Number(t.maxPlayers || 4)
     })));
 
     const enriched = waiting.map(t => ({
@@ -39,37 +39,6 @@ router.get('/', async (req, res) => {
     res.status(200).json(enriched);
   } catch (err) {
     console.error('❌ Sit-n-Go fetch error:', err.message);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// POST /api/sit-n-go/join/:tableId
-router.post('/join/:tableId', async (req, res) => {
-  const { tableId } = req.params;
-  const { playerId } = req.body;
-
-  try {
-    const tournament = await Tournament.findOne({ id: tableId });
-
-    if (!tournament) {
-      return res.status(404).json({ error: 'Tournament not found' });
-    }
-
-    if (tournament.registeredPlayers.includes(playerId)) {
-      return res.status(400).json({ error: 'Player already registered' });
-    }
-
-    tournament.registeredPlayers.push(playerId);
-
-    if (tournament.registeredPlayers.length >= tournament.maxPlayers) {
-      tournament.status = 'active';
-    }
-
-    await tournament.save();
-
-    res.status(200).json({ message: 'Joined Sit-n-Go', tournament });
-  } catch (err) {
-    console.error('❌ Join error:', err.message);
     res.status(500).json({ error: 'Server error' });
   }
 });
