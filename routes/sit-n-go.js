@@ -44,9 +44,12 @@ router.post('/join/:tournamentId', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const tournaments = await Tournament.find({
-      startTime: null,
-      status: 'scheduled',
-      type: 'sit-n-go',
+      $or: [
+        { startTime: null },
+        { startTime: { $exists: false } }
+      ],
+      status: { $in: ['scheduled', 'pending', 'created'] },
+      type: { $in: ['sit-n-go', 'sitngo'] },
     });
 
     const enriched = tournaments.map(t => ({
@@ -59,7 +62,7 @@ router.get('/', async (req, res) => {
       game: t.game,
       goalieMode: t.goalieMode,
       elimination: t.elimination,
-      maxPlayers: t.maxPlayers,
+      maxPlayers: Number(t.maxPlayers),
     }));
 
     return res.status(200).json(enriched);
