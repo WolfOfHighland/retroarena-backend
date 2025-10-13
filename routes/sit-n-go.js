@@ -11,7 +11,11 @@ router.get('/', async (req, res) => {
     });
 
     const waiting = tournaments
-      .filter(t => (t.registeredPlayers?.length || 0) < Number(t.maxPlayers || 4))
+      .filter(t => {
+        const max = parseInt(t.maxPlayers) || 4;
+        const reg = t.registeredPlayers?.length || 0;
+        return reg < max;
+      })
       .slice(0, 3);
 
     console.log('🎯 Sit-n-Go route hit — returning 3 waiting tables');
@@ -19,7 +23,7 @@ router.get('/', async (req, res) => {
       id: t.id,
       name: t.name,
       registered: t.registeredPlayers?.length || 0,
-      max: Number(t.maxPlayers || 4)
+      max: parseInt(t.maxPlayers) || 4
     })));
 
     const enriched = waiting.map(t => ({
@@ -32,7 +36,7 @@ router.get('/', async (req, res) => {
       game: t.game,
       goalieMode: t.goalieMode,
       elimination: t.elimination,
-      maxPlayers: Number(t.maxPlayers || 4),
+      maxPlayers: parseInt(t.maxPlayers) || 4,
       status: t.status || 'scheduled',
     }));
 
