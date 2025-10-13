@@ -40,6 +40,9 @@ app.use('/api', (req, _res, next) => {
   next();
 });
 app.use('/api/sit-n-go', require('./routes/sit-n-go'));
+app.use('/api/sit-n-go', require('./routes/sit-n-go-join'));
+app.use('/api/tournaments', require('./routes/tournaments'));
+app.use('/api/tournaments', require('./routes/tournaments-join'));
 // Health checks
 app.get("/", (_req, res) => res.send("Retro Rumble Arena backend is live 🐺"));
 app.get("/api/ping", (_req, res) => res.send("pong"));
