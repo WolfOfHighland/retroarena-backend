@@ -5,7 +5,7 @@ const Tournament = require('../models/Tournament');
 // POST /api/sit-n-go/join/:id
 router.post('/join/:id', async (req, res) => {
   try {
-    const tournament = await Tournament.findById(req.params.id);
+    const tournament = await Tournament.findOne({ id: req.params.id });
     if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
     const { playerId } = req.body;
