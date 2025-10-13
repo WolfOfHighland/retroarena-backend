@@ -12,12 +12,16 @@ router.post('/join/:id', async (req, res) => {
     if (!playerId) return res.status(400).json({ error: 'Missing playerId' });
 
     const alreadyJoined = tournament.registeredPlayers?.includes(playerId);
-    if (alreadyJoined) return res.status(200).json({ message: 'Already joined' });
+    if (alreadyJoined) {
+      console.log(`⚠️ Player ${playerId} already joined ${tournament.name}`);
+      return res.status(200).json({ message: 'Already joined' });
+    }
 
     tournament.registeredPlayers.push(playerId);
     await tournament.save();
 
     console.log(`✅ Player ${playerId} joined ${tournament.name}`);
+    console.log('✅ Join successful for', req.params.id);
     res.status(200).json({ message: 'Joined successfully' });
   } catch (err) {
     console.error('❌ Join error:', err.message);
