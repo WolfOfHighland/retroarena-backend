@@ -11,6 +11,7 @@ const TournamentSchema = new mongoose.Schema({
   type: { type: String, default: "sit-n-go" }, // ✅ Required for sit-n-go filtering
   registeredPlayers: { type: Array, default: [] },
   entryFee: { type: Number, default: 0 },
+  maxPlayers: { type: Number, required: true },
   prizeType: { type: String, enum: ["guaranteed", "dynamic"], default: "dynamic" },
   prizeAmount: { type: Number, default: 0 },
   elimination: { type: String, enum: ["single", "double"], default: "single" },
