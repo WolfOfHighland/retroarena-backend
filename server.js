@@ -9,6 +9,7 @@ const { createClient } = require('redis');
 const cors = require('cors');
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const io = socketIO(server)
 
 // Models
 const Player = require('./models/Player');
