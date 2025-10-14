@@ -9,18 +9,6 @@ const { createClient } = require('redis');
 const cors = require('cors');
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const io = socketIO(server)
-
-// Models
-const Player = require('./models/Player');
-const Tournament = require('./models/Tournament');
-
-// Scheduler
-const {
-  scheduleAllTournaments,
-  scheduleTournamentStart,
-  watchSitNGoTables,
-} = require('./scheduler/tournaments');
 
 // Express setup
 const app = express();
@@ -35,20 +23,6 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// API logger
-app.use('/api', (req, _res, next) => {
-  console.log(`➡️ API ${req.method} ${req.originalUrl}`);
-  next();
-});
-app.use('/api/sit-n-go', require('./routes/sit-n-go'));
-app.use('/api/sit-n-go', require('./routes/sit-n-go-join')(io)); // inject io here
-app.use('/api/tournaments', require('./routes/tournaments'));
-app.use('/api/tournaments', require('./routes/tournaments-join'));
-// Health checks
-app.get("/", (_req, res) => res.send("Retro Rumble Arena backend is live 🐺"));
-app.get("/api/ping", (_req, res) => res.send("pong"));
-app.get("/ping", (_req, res) => res.send("pong"));
-
 // HTTP + Socket.IO setup
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -58,6 +32,77 @@ const io = new Server(server, {
   },
 });
 module.exports.io = io;
+
+// Models
+const Player = require('./models/Player');
+const Tournament = require('./models/Tournament');
+
+// Scheduler
+const {
+  scheduleAllTournaments,
+  scheduleTournamentStart,
+  watchSitNGoTables,
+} = require('./scheduler/tournaments');
+
+// API logger
+app.use('/api', (req, _res, next) => {
+  console.log(`➡️ API ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+// ✅ Route wiring
+const matchRoutes = require('./routes/match');
+const sitngoRoutes = require('./routes/sit-n-go');
+const tournamentRoutes = require('./routes/tournaments');
+
+// ✅ Mount each route explicitly
+app.use('/api/match', matchRoutes);
+app.use('/api/sit-n-go', sitngoRoutes);
+app.use('/api/sit-n-go', require('./routes/sit-n-go-join')(io)); // inject io here
+app.use('/api/tournaments', tournamentRoutes);
+app.use('/api/tournaments', require('./routes/tournaments-join'));
+
+// Health checks
+app.get("/", (_req, res) => res.send("Retro Rumble Arena backend is live 🐺"));
+app.get("/api/ping", (_req, res) => res.send("pong"));
+app.get("/ping", (_req, res) => res.send("pong"));
+
+// Socket.IO handlers
+io.on('connection', (socket) => {
+  console.log(`✅ Socket connected: ${socket.id}`);
+
+  socket.onAny((event, payload) => {
+    console.log(`📡 Received socket event: ${event}`, payload);
+  });
+
+  socket.on("registerRoom", ({ room }) => {
+    console.log(`📥 registerRoom received:`, room);
+    socket.join(room);
+    console.log(`📡 Socket ${socket.id} joined room: ${room}`);
+  });
+
+  socket.on("joinTournament", (room) => {
+    console.log(`📡 Socket ${socket.id} joining tournament room: ${room}`);
+    socket.join(room);
+  });
+
+  socket.on('testPing', (data) => {
+    console.log('🧪 testPing received:', data);
+    socket.emit('testPong', { message: 'pong from backend' });
+  });
+
+  socket.on('resyncRequest', async ({ matchId }) => {
+    const state = await loadMatchState(matchId);
+    if (state) {
+      console.log(`🔁 Resyncing match state for ${matchId}`);
+      socket.emit('resyncMatch', state);
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`❌ Socket disconnected: ${socket.id}`);
+  });
+});
 
 // Redis setup
 let redis;
@@ -157,53 +202,6 @@ async function loadMatchState(matchId) {
     return null;
   }
 }
-
-// ✅ Route wiring
-const matchRoutes = require('./routes/match');
-const sitngoRoutes = require('./routes/sit-n-go');
-const tournamentRoutes = require('./routes/tournaments');
-
-// ✅ Mount each route explicitly
-app.use('/api/match', matchRoutes);         // Now lives at /api/match/...
-app.use('/api/sit-n-go', sitngoRoutes);     // Lives at /api/sit-n-go
-app.use('/api/tournaments', tournamentRoutes);
-
-// Socket.IO handlers
-io.on('connection', (socket) => {
-  console.log(`✅ Socket connected: ${socket.id}`);
-
-  socket.onAny((event, payload) => {
-    console.log(`📡 Received socket event: ${event}`, payload);
-  });
-
-  socket.on("registerRoom", ({ room }) => {
-    console.log(`📥 registerRoom received:`, room);
-    socket.join(room);
-    console.log(`📡 Socket ${socket.id} joined room: ${room}`);
-  });
-
-  socket.on("joinTournament", (room) => {
-    console.log(`📡 Socket ${socket.id} joining tournament room: ${room}`);
-    socket.join(room);
-  });
-
-  socket.on('testPing', (data) => {
-    console.log('🧪 testPing received:', data);
-    socket.emit('testPong', { message: 'pong from backend' });
-  });
-
-  socket.on('resyncRequest', async ({ matchId }) => {
-    const state = await loadMatchState(matchId);
-    if (state) {
-      console.log(`🔁 Resyncing match state for ${matchId}`);
-      socket.emit('resyncMatch', state);
-    }
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`❌ Socket disconnected: ${socket.id}`);
-  });
-});
 
 // Custom routes
 app.post('/register-player', async (req, res) => {
