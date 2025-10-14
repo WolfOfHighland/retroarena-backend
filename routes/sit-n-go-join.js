@@ -26,17 +26,17 @@ module.exports = function(io) {
 
       // 🔥 Trigger matchStart if full
       if (tournament.registeredPlayers.length === tournament.maxPlayers) {
-        const matchState = {
-          matchId: tournament.id,
-          rom: tournament.rom || 'nhl95.bin',
-          core: tournament.core || 'genesis',
-          goalieMode: tournament.goalieMode,
-          periodLength: tournament.periodLength || 5,
-        };
+  const matchState = {
+    matchId: tournament.id,
+    rom: tournament.rom || 'NHL_95.bin', // fallback to correct filename
+    core: tournament.core || 'genesis_plus_gx', // fallback to correct core
+    goalieMode: tournament.goalieMode || 'manual_goalie',
+    periodLength: tournament.periodLength || 5,
+  };
 
-        console.log(`🎮 Match full — emitting matchStart for ${tournament.id}`);
-        io.to(tournament.id).emit('matchStart', matchState);
-      }
+  console.log(`🎮 Match full — emitting matchStart for ${tournament.id}`);
+  io.to(tournament.id).emit('matchStart', matchState);
+}
 
       res.status(200).json({ message: 'Joined successfully' });
     } catch (err) {
