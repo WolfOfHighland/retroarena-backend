@@ -56,4 +56,38 @@ router.get('/', async (req, res) => {
   }
 });
 
+// POST /api/sit-n-go/clone/:id
+router.post('/clone/:id', async (req, res) => {
+  try {
+    const original = await Tournament.findOne({ id: req.params.id });
+    if (!original) return res.status(404).json({ error: 'Original tournament not found' });
+
+    const clone = new Tournament({
+      id: `${original.id}-clone-${Date.now()}`,
+      name: original.name,
+      type: original.type || 'sit-n-go',
+      maxPlayers: original.maxPlayers,
+      entryFee: original.entryFee,
+      prizeType: original.prizeType,
+      prizeAmount: original.prizeAmount,
+      elimination: original.elimination,
+      goalieMode: original.goalieMode,
+      periodLength: original.periodLength,
+      rom: original.rom || 'NHL_95.bin',
+      core: original.core || 'genesis_plus_gx',
+      registeredPlayers: [],
+      status: 'scheduled',
+      game: original.game,
+    });
+
+    await clone.save();
+
+    console.log(`🧬 Clone created: ${clone.id}`);
+    res.status(201).json({ message: 'Clone created', clone });
+  } catch (err) {
+    console.error('❌ Clone error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;
