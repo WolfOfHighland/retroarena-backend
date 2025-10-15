@@ -19,6 +19,10 @@ const sitngoTemplates = [
     prizeType: 'dynamic',
     prizeAmount: 0,
     registeredPlayers: [],
+    rom: 'NHL_95.bin',
+    core: 'genesis_plus_gx',
+    type: 'sit-n-go',
+    periodLength: 5,
   },
   {
     id: 'nhl94-auto-2',
@@ -32,6 +36,10 @@ const sitngoTemplates = [
     prizeType: 'dynamic',
     prizeAmount: 0,
     registeredPlayers: [],
+    rom: 'NHL_94.bin',
+    core: 'genesis_plus_gx',
+    type: 'sit-n-go',
+    periodLength: 5,
   },
   {
     id: 'nhl95-double-10',
@@ -45,6 +53,10 @@ const sitngoTemplates = [
     prizeType: 'dynamic',
     prizeAmount: 0,
     registeredPlayers: [],
+    rom: 'NHL_95.bin',
+    core: 'genesis_plus_gx',
+    type: 'sit-n-go',
+    periodLength: 5,
   },
 ];
 
