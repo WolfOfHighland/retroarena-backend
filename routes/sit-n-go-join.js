@@ -1,5 +1,6 @@
 const express = require('express');
 const Tournament = require('../models/Tournament');
+const { generateBracket, createMatchState } = require('../utils/bracketManager');
 
 module.exports = function(io) {
   const router = express.Router();
@@ -26,16 +27,17 @@ module.exports = function(io) {
 
       // 🔥 Trigger matchStart if full
       if (tournament.registeredPlayers.length === tournament.maxPlayers) {
-        const matchState = {
-          matchId: tournament.id,
-          rom: tournament.rom || 'NHL_95.bin',
-          core: tournament.core || 'genesis_plus_gx',
-          goalieMode: tournament.goalieMode || 'manual_goalie',
-          periodLength: tournament.periodLength || 5,
-        };
+        const bracket = generateBracket(tournament.registeredPlayers);
 
-        console.log(`🎮 Match full — emitting matchStart for ${tournament.id}`);
-        io.to(tournament.id).emit('matchStart', matchState);
+        bracket.forEach((pair, index) => {
+          const matchId = `${tournament.id}-match-${index + 1}`;
+          const matchState = createMatchState(matchId, pair, tournament);
+
+          console.log(`🎮 Emitting matchStart for ${matchId}`);
+          pair.forEach(player => {
+            io.to(player).emit('matchStart', matchState);
+          });
+        });
 
         // 🧬 Auto-clone tournament for next match
         const newTournament = new Tournament({
@@ -58,7 +60,7 @@ module.exports = function(io) {
 
         await newTournament.save();
         console.log(`🧬 Auto-cloned new tournament: ${newTournament.id}`);
-        io.emit('tournamentCreated', newTournament); // Optional: notify frontend
+        io.emit('tournamentCreated', newTournament);
       }
 
       res.status(200).json({ message: 'Joined successfully' });
