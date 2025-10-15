@@ -26,17 +26,40 @@ module.exports = function(io) {
 
       // 🔥 Trigger matchStart if full
       if (tournament.registeredPlayers.length === tournament.maxPlayers) {
-  const matchState = {
-    matchId: tournament.id,
-    rom: tournament.rom || 'NHL_95.bin', // fallback to correct filename
-    core: tournament.core || 'genesis_plus_gx', // fallback to correct core
-    goalieMode: tournament.goalieMode || 'manual_goalie',
-    periodLength: tournament.periodLength || 5,
-  };
+        const matchState = {
+          matchId: tournament.id,
+          rom: tournament.rom || 'NHL_95.bin',
+          core: tournament.core || 'genesis_plus_gx',
+          goalieMode: tournament.goalieMode || 'manual_goalie',
+          periodLength: tournament.periodLength || 5,
+        };
 
-  console.log(`🎮 Match full — emitting matchStart for ${tournament.id}`);
-  io.to(tournament.id).emit('matchStart', matchState);
-}
+        console.log(`🎮 Match full — emitting matchStart for ${tournament.id}`);
+        io.to(tournament.id).emit('matchStart', matchState);
+
+        // 🧬 Auto-clone tournament for next match
+        const newTournament = new Tournament({
+          id: `${tournament.id}-clone-${Date.now()}`,
+          name: tournament.name,
+          game: tournament.game,
+          goalieMode: tournament.goalieMode,
+          periodLength: tournament.periodLength,
+          status: 'scheduled',
+          type: tournament.type,
+          registeredPlayers: [],
+          entryFee: tournament.entryFee,
+          maxPlayers: tournament.maxPlayers,
+          prizeType: tournament.prizeType,
+          prizeAmount: 0,
+          elimination: tournament.elimination,
+          rom: tournament.rom,
+          core: tournament.core,
+        });
+
+        await newTournament.save();
+        console.log(`🧬 Auto-cloned new tournament: ${newTournament.id}`);
+        io.emit('tournamentCreated', newTournament); // Optional: notify frontend
+      }
 
       res.status(200).json({ message: 'Joined successfully' });
     } catch (err) {

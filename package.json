@@ -4,7 +4,8 @@
   "description": "Backend server for Retro Rumble Arena with Socket.IO, MongoDB, and Stripe integration",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",
@@ -29,5 +30,8 @@
     "express"
   ],
   "author": "WolfOfHighland",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
 }
