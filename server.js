@@ -50,16 +50,11 @@ app.use('/api', (req, _res, next) => {
   next();
 });
 
-// ✅ Route wiring
-const matchRoutes = require('./routes/match');
-const sitngoRoutes = require('./routes/sit-n-go');
-const tournamentRoutes = require('./routes/tournaments');
-
-// ✅ Mount each route explicitly
-app.use('/api/match', matchRoutes);
-app.use('/api/sit-n-go', sitngoRoutes);
-app.use('/api/sit-n-go', require('./routes/sit-n-go-join')(io)); // inject io here
-app.use('/api/tournaments', tournamentRoutes);
+// Routes
+app.use('/api/match', require('./routes/match'));
+app.use('/api/sit-n-go', require('./routes/sit-n-go'));
+app.use('/api/sit-n-go', require('./routes/sit-n-go-join')(io));
+app.use('/api/tournaments', require('./routes/tournaments'));
 app.use('/api/tournaments', require('./routes/tournaments-join'));
 
 // Health checks
@@ -84,6 +79,36 @@ io.on('connection', (socket) => {
   socket.on("joinTournament", (room) => {
     console.log(`📡 Socket ${socket.id} joining tournament room: ${room}`);
     socket.join(room);
+  });
+
+  socket.on("matchResult", async ({ tournamentId, matchId, winnerId }) => {
+    console.log(`🏁 Match result received for ${matchId} — winner: ${winnerId}`);
+
+    try {
+      const tournament = await Tournament.findOne({ id: tournamentId });
+      if (!tournament) {
+        console.warn(`⚠️ Tournament ${tournamentId} not found`);
+        return;
+      }
+
+      tournament.results = tournament.results || [];
+      tournament.results.push({
+        matchId,
+        winnerId,
+        timestamp: Date.now(),
+      });
+
+      await tournament.save();
+      console.log(`✅ Match result saved for ${matchId}`);
+
+      io.to(tournamentId).emit("matchEnded", {
+        matchId,
+        winnerId,
+        message: `Match ${matchId} ended. Winner: ${winnerId}`,
+      });
+    } catch (err) {
+      console.error(`❌ Failed to save match result for ${matchId}:`, err.message);
+    }
   });
 
   socket.on('testPing', (data) => {
@@ -166,9 +191,9 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
     console.log(`💰 Payment confirmed for match ${matchId}`);
 
     io.to(matchId).emit('matchStart', {
-      rom: 'NHL_95.bin',
+      rom: '/roms/NHL_95.bin',
       core: 'genesis_plus_gx',
-      goalieMode: 'manual_goalie',
+      goalieMode: 'manual',
       matchId,
     });
   }
@@ -239,7 +264,7 @@ app.post('/register-player', async (req, res) => {
     await newPlayer.save();
     console.log(`📝 Player saved: ${trimmedUsername} (${trimmedEmail})`);
 
-    if (roomExists) {
+        if (roomExists) {
       io.to(trimmedEmail).emit('registrationConfirmed', emitPayload);
     } else if (socketId) {
       io.to(socketId).emit('registrationConfirmed', emitPayload);
@@ -250,12 +275,6 @@ app.post('/register-player', async (req, res) => {
     console.error('❌ Registration error:', err.message);
     return res.status(500).json({ error: 'Failed to register player' });
   }
-});
-
-app.post("/test-room", (req, res) => {
-  const { room } = req.body;
-  io.to(room).emit("registrationConfirmed", { username: "WolfTest", status: "new" });
-  res.send("Emit sent");
 });
 
 app.post("/start-match", async (req, res) => {
@@ -273,7 +292,7 @@ app.post("/start-match", async (req, res) => {
     }
 
     const matchState = {
-      rom,
+      rom: `/roms/${rom}`,
       core,
       goalieMode: tournament.goalieMode || "manual",
       periodLength: tournament.periodLength || 5,
@@ -293,6 +312,7 @@ app.post("/start-match", async (req, res) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 });
+
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`🚀 Server listening on port ${PORT}`);
