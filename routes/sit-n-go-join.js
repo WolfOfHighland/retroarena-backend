@@ -17,22 +17,23 @@ module.exports = function (io) {
       const { playerId } = req.body;
       if (!playerId) return res.status(400).json({ error: 'Missing playerId' });
 
-      const alreadyJoined = tournament.registeredPlayers?.includes(playerId);
+      // ✅ FIXED: Check for existing player using object match
+      const alreadyJoined = tournament.registeredPlayers?.some(p => p.id === playerId);
       if (alreadyJoined) {
         console.log(`⚠️ Player ${playerId} already joined ${tournament.name}`);
         return res.status(200).json({ message: 'Already joined' });
       }
 
-      tournament.registeredPlayers.push(playerId);
+      // ✅ FIXED: Push player as object and persist
+      tournament.registeredPlayers.push({ id: playerId });
       await tournament.save();
-
       console.log(`✅ Player ${playerId} joined ${tournament.name}`);
       console.log('✅ Join successful for', req.params.id);
 
       // 🔥 Trigger matchStart if full
       if (tournament.registeredPlayers.length === tournament.maxPlayers) {
         const round = 1;
-        const bracket = generateBracket(tournament.registeredPlayers);
+        const bracket = generateBracket(tournament.registeredPlayers.map(p => p.id));
 
         bracket.forEach((pair, index) => {
           const matchId = `${tournament.id}-r${round}-m${index}`;
