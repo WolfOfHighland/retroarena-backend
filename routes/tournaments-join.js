@@ -26,10 +26,10 @@ module.exports = function(io) {
       console.log(`✅ Player ${playerId} registered for ${tournament.name}`);
 
       // 🧠 Group players into brackets of BRACKET_SIZE
-      const totalPlayers = tournament.registeredPlayers.length;
       const unprocessed = [...tournament.registeredPlayers];
       const matched = new Set();
       let bracketCount = 0;
+      const round = 1;
 
       while (unprocessed.length >= BRACKET_SIZE) {
         const bracketPlayers = unprocessed.splice(0, BRACKET_SIZE);
@@ -39,8 +39,15 @@ module.exports = function(io) {
 
         const matches = generateBracket(bracketPlayers);
         matches.forEach((pair, index) => {
-          const matchId = `${tournament.id}-bracket${bracketCount}-match${index + 1}`;
-          const matchState = createMatchState(matchId, pair, tournament);
+          const matchId = `${tournament.id}-bracket${bracketCount}-r${round}-m${index}`;
+          const matchState = createMatchState(matchId, pair, {
+            rom: tournament.rom,
+            core: tournament.core,
+            goalieMode: tournament.goalieMode,
+            periodLength: tournament.periodLength,
+            round,
+            matchIndex: index,
+          });
 
           console.log(`🎮 Emitting matchStart for ${matchId}`);
           pair.forEach(player => {
@@ -50,7 +57,6 @@ module.exports = function(io) {
         });
       }
 
-      // Remaining players will wait for the next wave
       const remaining = tournament.registeredPlayers.filter(p => !matched.has(p));
       console.log(`⏳ Waiting pool: ${remaining.length} players`);
 
