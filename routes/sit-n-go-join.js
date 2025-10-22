@@ -17,20 +17,26 @@ module.exports = function (io) {
       const { playerId } = req.body;
       if (!playerId) return res.status(400).json({ error: 'Missing playerId' });
 
-      // ✅ FIXED: Check for existing player using object match
-      const alreadyJoined = tournament.registeredPlayers?.some(p => p.id === playerId);
+      // 🧼 Normalize legacy string entries to object format
+      if (Array.isArray(tournament.registeredPlayers)) {
+        tournament.registeredPlayers = tournament.registeredPlayers.map(p =>
+          typeof p === 'string' ? { id: p } : p
+        );
+      }
+
+      // ✅ Check for existing player
+      const alreadyJoined = tournament.registeredPlayers.some(p => p.id === playerId);
       if (alreadyJoined) {
         console.log(`⚠️ Player ${playerId} already joined ${tournament.name}`);
         return res.status(200).json({ message: 'Already joined' });
       }
 
-      // ✅ FIXED: Push player as object and persist
+      // ✅ Push and persist
       tournament.registeredPlayers.push({ id: playerId });
       await tournament.save();
-      console.log(`✅ Player ${playerId} joined ${tournament.name}`);
-      console.log('✅ Join successful for', req.params.id);
+      console.log(`✅ Saved ${playerId} to tournament ${tournament.id}`);
 
-      // 🔥 Trigger matchStart if full
+      // 🔥 Emit matches if full
       if (tournament.registeredPlayers.length === tournament.maxPlayers) {
         const round = 1;
         const bracket = generateBracket(tournament.registeredPlayers.map(p => p.id));
@@ -52,7 +58,7 @@ module.exports = function (io) {
           });
         });
 
-        // 🧬 Auto-clone tournament for next match
+        // 🧬 Auto-clone tournament
         const newTournament = new Tournament({
           id: `${tournament.id}-clone-${Date.now()}`,
           name: tournament.name,
