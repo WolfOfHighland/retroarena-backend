@@ -24,6 +24,12 @@ module.exports = function (io) {
         );
       }
 
+      // 🚫 Enforce maxPlayers limit
+      if (tournament.registeredPlayers.length >= tournament.maxPlayers) {
+        console.log(`🚫 Tournament ${tournament.id} is full`);
+        return res.status(403).json({ error: 'Tournament is full' });
+      }
+
       // ✅ Check for existing player
       const alreadyJoined = tournament.registeredPlayers.some(p => p.id === playerId);
       if (alreadyJoined) {
