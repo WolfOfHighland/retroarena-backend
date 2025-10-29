@@ -50,11 +50,11 @@ app.use('/api', (req, _res, next) => {
   next();
 });
 
-// Routes
+// Routes (✅ FIXED: pass io to tournaments route)
 app.use('/api/match', require('./routes/match'));
 app.use('/api/sit-n-go', require('./routes/sit-n-go'));
 app.use('/api/sit-n-go', require('./routes/sit-n-go-join')(io));
-app.use('/api/tournaments', require('./routes/tournaments'));
+app.use('/api/tournaments', require('./routes/tournaments')(io)); // ✅ FIXED
 app.use('/api/tournaments', require('./routes/tournaments-join'));
 
 // Health checks
