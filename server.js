@@ -155,8 +155,17 @@ if (process.env.MONGO_URI) {
   mongoose.connect(process.env.MONGO_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-  }).then(() => {
+  }).then(async () => {
     console.log('✅ Connected to MongoDB');
+
+    // 🧠 Daily tournament refresh logic
+    const seedOpeningDay = require('./scripts/seedOpeningDay');
+    await Tournament.deleteMany({
+      startTime: { $lt: new Date() },
+      registeredPlayers: { $size: 0 }
+    });
+    await seedOpeningDay(); // 🔁 Seed today's brackets
+
     scheduleAllTournaments(io);
     watchSitNGoTables(io);
   }).catch((err) => {
