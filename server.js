@@ -50,11 +50,11 @@ app.use('/api', (req, _res, next) => {
   next();
 });
 
-// Routes (✅ FIXED: pass io to tournaments route)
+// Routes
 app.use('/api/match', require('./routes/match'));
 app.use('/api/sit-n-go', require('./routes/sit-n-go'));
 app.use('/api/sit-n-go', require('./routes/sit-n-go-join')(io));
-app.use('/api/tournaments', require('./routes/tournaments')(io)); // ✅ FIXED
+app.use('/api/tournaments', require('./routes/tournaments')(io));
 app.use('/api/tournaments', require('./routes/tournaments-join'));
 
 // Health checks
@@ -71,35 +71,23 @@ io.on('connection', (socket) => {
   });
 
   socket.on("registerRoom", ({ room }) => {
-    console.log(`📥 registerRoom received:`, room);
     socket.join(room);
     console.log(`📡 Socket ${socket.id} joined room: ${room}`);
   });
 
   socket.on("joinTournament", (room) => {
-    console.log(`📡 Socket ${socket.id} joining tournament room: ${room}`);
     socket.join(room);
+    console.log(`📡 Socket ${socket.id} joining tournament room: ${room}`);
   });
 
   socket.on("matchResult", async ({ tournamentId, matchId, winnerId }) => {
-    console.log(`🏁 Match result received for ${matchId} — winner: ${winnerId}`);
-
     try {
       const tournament = await Tournament.findOne({ id: tournamentId });
-      if (!tournament) {
-        console.warn(`⚠️ Tournament ${tournamentId} not found`);
-        return;
-      }
+      if (!tournament) return;
 
       tournament.results = tournament.results || [];
-      tournament.results.push({
-        matchId,
-        winnerId,
-        timestamp: Date.now(),
-      });
-
+      tournament.results.push({ matchId, winnerId, timestamp: Date.now() });
       await tournament.save();
-      console.log(`✅ Match result saved for ${matchId}`);
 
       io.to(tournamentId).emit("matchEnded", {
         matchId,
@@ -107,19 +95,17 @@ io.on('connection', (socket) => {
         message: `Match ${matchId} ended. Winner: ${winnerId}`,
       });
     } catch (err) {
-      console.error(`❌ Failed to save match result for ${matchId}:`, err.message);
+      console.error(`❌ Failed to save match result:`, err.message);
     }
   });
 
   socket.on('testPing', (data) => {
-    console.log('🧪 testPing received:', data);
     socket.emit('testPong', { message: 'pong from backend' });
   });
 
   socket.on('resyncRequest', async ({ matchId }) => {
     const state = await loadMatchState(matchId);
     if (state) {
-      console.log(`🔁 Resyncing match state for ${matchId}`);
       socket.emit('resyncMatch', state);
     }
   });
@@ -143,12 +129,15 @@ if (process.env.REDIS_URL) {
       io.adapter(createAdapter(pubClient, subClient));
       console.log('🔌 Redis adapter connected');
     } catch (err) {
-      console.error('⚠️ Redis failed — continuing without adapter:', err.message);
+      console.error('⚠️ Redis failed:', err.message);
     }
   })();
 } else {
   console.log('⚠️ No REDIS_URL provided — skipping Redis adapter');
 }
+
+// 🧠 Daily tournament refresh logic
+const seedOpeningDay = require('./scripts/seedOpeningDay');
 
 // MongoDB setup
 if (process.env.MONGO_URI) {
@@ -158,13 +147,14 @@ if (process.env.MONGO_URI) {
   }).then(async () => {
     console.log('✅ Connected to MongoDB');
 
-    // 🧠 Daily tournament refresh logic
-    const seedOpeningDay = require('./scripts/seedOpeningDay');
+    // 🧹 Remove expired empty tournaments
     await Tournament.deleteMany({
       startTime: { $lt: new Date() },
-      registeredPlayers: { $size: 0 }
+      registeredPlayers: []
     });
-    await seedOpeningDay(); // 🔁 Seed today's brackets
+
+    // 🔁 Seed today's brackets
+    await seedOpeningDay();
 
     scheduleAllTournaments(io);
     watchSitNGoTables(io);
@@ -197,8 +187,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const matchId = session.success_url?.split('matchId=')[1];
-    console.log(`💰 Payment confirmed for match ${matchId}`);
-
     io.to(matchId).emit('matchStart', {
       rom: '/roms/NHL_95.bin',
       core: 'genesis_plus_gx',
@@ -215,7 +203,6 @@ async function saveMatchState(matchId, state) {
   if (!redis) return;
   try {
     await redis.set(`match:${matchId}`, JSON.stringify(state));
-    console.log(`💾 Match state saved for ${matchId}`);
   } catch (err) {
     console.error(`⚠️ Failed to save match state: ${err.message}`);
   }
@@ -225,12 +212,7 @@ async function loadMatchState(matchId) {
   if (!redis) return null;
   try {
     const data = await redis.get(`match:${matchId}`);
-    if (data) {
-      console.log(`📥 Match state loaded for ${matchId}`);
-      return JSON.parse(data);
-    }
-    console.log(`⚠️ No match state found for ${matchId}`);
-    return null;
+    return data ? JSON.parse(data) : null;
   } catch (err) {
     console.error(`⚠️ Failed to load match state: ${err.message}`);
     return null;
@@ -240,8 +222,6 @@ async function loadMatchState(matchId) {
 // Custom routes
 app.post('/register-player', async (req, res) => {
   const { username, email, country, socketId } = req.body;
-  console.log('📨 Incoming registration payload:', req.body);
-
   if (!username?.trim() || !email?.trim()) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
@@ -260,7 +240,6 @@ app.post('/register-player', async (req, res) => {
     };
 
     if (existing) {
-      console.log(`⚠️ Duplicate registration attempt: ${trimmedEmail}`);
       if (roomExists) {
         io.to(trimmedEmail).emit('registrationConfirmed', emitPayload);
       } else if (socketId) {
@@ -271,9 +250,8 @@ app.post('/register-player', async (req, res) => {
 
     const newPlayer = new Player({ username: trimmedUsername, email: trimmedEmail, country: trimmedCountry });
     await newPlayer.save();
-    console.log(`📝 Player saved: ${trimmedUsername} (${trimmedEmail})`);
 
-        if (roomExists) {
+    if (roomExists) {
       io.to(trimmedEmail).emit('registrationConfirmed', emitPayload);
     } else if (socketId) {
       io.to(socketId).emit('registrationConfirmed', emitPayload);
@@ -317,11 +295,10 @@ app.post("/start-match", async (req, res) => {
       matchState,
     });
   } catch (err) {
-    console.error("❌ start-match error:", err);
+    console.error("❌ start-match error:", err.message);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
-
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`🚀 Server listening on port ${PORT}`);

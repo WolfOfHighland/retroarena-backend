@@ -7,7 +7,8 @@ async function seed() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
 
-    const baseDate = new Date("2025-10-19T12:00:00-04:00"); // Noon EDT
+    const baseDate = new Date(); 
+    baseDate.setHours(12, 0, 0, 0); // Start at noon today
     const tournaments = [];
 
     for (let i = 0; i < 8; i++) {
