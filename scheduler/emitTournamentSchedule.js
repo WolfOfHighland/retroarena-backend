@@ -17,6 +17,8 @@ function formatTimeEDT(date) {
 }
 
 async function emitTournamentSchedule(io) {
+  console.log(`📡 emitTournamentSchedule triggered`); // ✅ LOG ADDED
+
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
