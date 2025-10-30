@@ -17,7 +17,7 @@ function formatTimeEDT(date) {
 }
 
 async function emitTournamentSchedule(io) {
-  console.log(`📡 emitTournamentSchedule triggered`); // ✅ LOG ADDED
+  console.log(`📡 emitTournamentSchedule triggered`);
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -25,23 +25,30 @@ async function emitTournamentSchedule(io) {
   const endOfDay = new Date();
   endOfDay.setHours(23, 59, 59, 999);
 
+  const now = Date.now();
+
   try {
     const today = await Tournament.find({
       startTime: { $gte: startOfDay, $lte: endOfDay },
     }).lean();
 
-    const visible = today.map((t) => ({
-      id: t._id,
-      name: t.name,
-      startTime: t.startTime,
-      localTime: formatTimeEDT(t.startTime),
-      game: t.game,
-      prizePool: t.prizeAmount,
-      status: t.status,
-      buyIn: t.entryFee || 0,
-      players: t.registeredPlayers?.length || 0,
-      elimination: t.elimination,
-    }));
+    const visible = today.map((t) => {
+      const start = new Date(t.startTime).getTime();
+      return {
+        id: t._id,
+        name: t.name,
+        startTime: t.startTime,
+        localTime: formatTimeEDT(t.startTime),
+        game: t.game,
+        prizePool: t.prizeAmount,
+        status: t.status,
+        buyIn: t.entryFee || 0,
+        players: t.registeredPlayers?.length || 0,
+        elimination: t.elimination,
+        isLive: t.status === "live",
+        hasStarted: start <= now,
+      };
+    });
 
     if (visible.length === 0) {
       visible.push({
@@ -55,6 +62,8 @@ async function emitTournamentSchedule(io) {
         buyIn: 0,
         players: 0,
         elimination: "Single Elim",
+        isLive: false,
+        hasStarted: false,
       });
     }
 
