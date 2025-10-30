@@ -50,6 +50,10 @@ module.exports = function(io) {
         return res.status(404).json({ error: 'Tournament not found' });
       }
 
+      if (!Array.isArray(tournament.registeredPlayers)) {
+        tournament.registeredPlayers = [];
+      }
+
       if (tournament.registeredPlayers.includes(playerId)) {
         return res.status(400).json({ error: 'Player already registered' });
       }
