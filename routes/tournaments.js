@@ -12,10 +12,24 @@ module.exports = function(io) {
         startTime: { $ne: null } // filters out Sit-n-Go templates
       });
 
-      const enriched = tournaments.map(t => ({
-        ...t.toObject(),
-        type: 'scheduled' // injects type for frontend filtering
-      }));
+      const enriched = tournaments.map(t => {
+        const entryFee = t.entryFee ?? 0;
+        const rakePercent = entryFee <= 10 ? 0.10 : entryFee <= 20 ? 0.08 : 0.05;
+        const rakeAmount = Math.round(entryFee * rakePercent * 100) / 100;
+        const prizeAmount = entryFee - rakeAmount;
+
+        return {
+          ...t.toObject(),
+          type: 'scheduled',
+          rakePercent,
+          rakeAmount,
+          prizeAmount,
+          prizeType: t.prizeType ?? 'dynamic',
+          prizeAmount: t.prizeType === 'guaranteed'
+            ? t.prizeAmount ?? prizeAmount
+            : prizeAmount
+        };
+      });
 
       res.status(200).json(enriched);
     } catch (err) {
