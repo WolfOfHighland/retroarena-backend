@@ -86,9 +86,32 @@ function scheduleTournamentStart(t, io) {
 // Schedule all tournaments on boot
 async function scheduleAllTournaments(io) {
   try {
-    const upcoming = await Tournament.find({ status: "scheduled" }).lean();
+    const upcoming = await Tournament.find({ status: "scheduled", startTime: { $ne: null } }).lean();
     console.log(`📋 Found ${upcoming.length} scheduled tournament(s)`);
     upcoming.forEach((t) => scheduleTournamentStart(t, io));
+
+    // Emit tournament lobby data
+    const visible = upcoming.map((t) => ({
+      id: t._id,
+      name: t.name,
+      startTime: t.startTime,
+      game: t.game,
+      prizePool: t.prizeAmount,
+      status: t.status,
+    }));
+
+    if (visible.length === 0) {
+      visible.push({
+        id: "dummy",
+        name: "No tournaments scheduled",
+        startTime: null,
+        game: "TBD",
+        prizePool: 0,
+        status: "placeholder",
+      });
+    }
+
+    io.emit("tournamentSchedule", visible);
   } catch (err) {
     console.error("⚠️ Failed to fetch tournaments:", err.message);
   }
@@ -114,14 +137,37 @@ async function rescheduleTournamentById(tournamentId, io) {
 
 // 🔁 Watch Sit‑n‑Go tables and emit matchStart when full
 async function watchSitNGoTables(io) {
-  console.log('👀 Watching Sit‑n‑Go tables…');
+  console.log("👀 Watching Sit‑n‑Go tables…");
 
   setInterval(async () => {
     try {
       const sitngos = await Tournament.find({
         startTime: null,
-        status: 'scheduled',
-      });
+        status: "scheduled",
+        type: "sit-n-go",
+      }).lean();
+
+      const visible = sitngos.map((t) => ({
+        id: t._id,
+        name: t.name,
+        buyIn: t.entryFee,
+        players: t.registeredPlayers?.length || 0,
+        prizePool: t.prizeAmount,
+        game: t.game,
+      }));
+
+      if (visible.length === 0) {
+        visible.push({
+          id: "dummy",
+          name: "Practice Table",
+          buyIn: 0,
+          players: 1,
+          prizePool: 0,
+          game: "NHL 95",
+        });
+      }
+
+      io.emit("sitngoList", visible);
 
       for (const t of sitngos) {
         const registered = Array.isArray(t.registeredPlayers)
@@ -131,34 +177,37 @@ async function watchSitNGoTables(io) {
         if (registered >= t.maxPlayers) {
           console.log(`🚨 Sit‑n‑Go "${t.name}" is full (${registered}/${t.maxPlayers})`);
 
-          t.status = 'live';
-          await t.save();
+          const updated = await Tournament.findById(t._id);
+          if (!updated) continue;
 
-          io.to(t._id.toString()).emit('matchStart', buildPayload(t));
-          console.log(`🚀 Emitted matchStart for Sit‑n‑Go "${t.name}" (${t._id})`);
+          updated.status = "live";
+          await updated.save();
+
+          io.to(updated._id.toString()).emit("matchStart", buildPayload(updated));
+          console.log(`🚀 Emitted matchStart for Sit‑n‑Go "${updated.name}" (${updated._id})`);
 
           const clone = new Tournament({
-            id: `${t.id}-clone-${Date.now()}`,
-            name: t.name,
+            id: `${updated.id}-clone-${Date.now()}`,
+            name: updated.name,
             startTime: null,
-            game: t.game,
-            goalieMode: t.goalieMode,
-            elimination: t.elimination,
-            maxPlayers: t.maxPlayers,
-            entryFee: t.entryFee,
-            prizeType: t.prizeType,
+            game: updated.game,
+            goalieMode: updated.goalieMode,
+            elimination: updated.elimination,
+            maxPlayers: updated.maxPlayers,
+            entryFee: updated.entryFee,
+            prizeType: updated.prizeType,
             prizeAmount: 0,
             registeredPlayers: [],
-            status: 'scheduled',
+            status: "scheduled",
             type: "sit-n-go",
-	});
+          });
 
           await clone.save();
           console.log(`🔁 Respawned Sit‑n‑Go: ${clone.name} (${clone._id})`);
         }
       }
     } catch (err) {
-      console.error('⚠️ Sit‑n‑Go watcher error:', err.message);
+      console.error("⚠️ Sit‑n‑Go watcher error:", err.message);
     }
   }, 3000);
 }

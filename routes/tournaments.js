@@ -1,32 +1,30 @@
 const express = require('express');
-const router = express.Router();
 const Tournament = require('../models/Tournament');
-const {
-  generateBracket,
-  createMatchState,
-} = require('../utils/bracketManager');
+const { generateBracket, createMatchState } = require('../utils/bracketManager');
 
-// GET /api/tournaments
-router.get('/', async (req, res) => {
-  try {
-    const tournaments = await Tournament.find({
-      startTime: { $ne: null } // filters out Sit-n-Go templates
-    });
-
-    const enriched = tournaments.map(t => ({
-      ...t.toObject(),
-      type: 'scheduled' // injects type for frontend filtering
-    }));
-
-    res.status(200).json(enriched);
-  } catch (err) {
-    console.error('❌ Failed to fetch tournaments:', err.message);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// POST /api/tournaments/register/:tournamentId
 module.exports = function(io) {
+  const router = express.Router();
+
+  // GET /api/tournaments
+  router.get('/', async (_req, res) => {
+    try {
+      const tournaments = await Tournament.find({
+        startTime: { $ne: null } // filters out Sit-n-Go templates
+      });
+
+      const enriched = tournaments.map(t => ({
+        ...t.toObject(),
+        type: 'scheduled' // injects type for frontend filtering
+      }));
+
+      res.status(200).json(enriched);
+    } catch (err) {
+      console.error('❌ Failed to fetch tournaments:', err.message);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+
+  // POST /api/tournaments/register/:tournamentId
   router.post('/register/:tournamentId', async (req, res) => {
     const { tournamentId } = req.params;
     const { playerId } = req.body;
@@ -46,7 +44,10 @@ module.exports = function(io) {
       await tournament.save();
 
       // 🔥 Trigger matchStart if full
-      if (tournament.registeredPlayers.length === tournament.maxPlayers) {
+      if (
+        tournament.maxPlayers &&
+        tournament.registeredPlayers.length === tournament.maxPlayers
+      ) {
         const round = 1;
         const bracket = generateBracket(tournament.registeredPlayers);
 
