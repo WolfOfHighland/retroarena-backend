@@ -1,24 +1,22 @@
 const Tournament = require("../models/Tournament");
+const emitTournamentSchedule = require("./emitTournamentSchedule"); // ✅ NEW IMPORT
 
 // In-memory registry: tournamentId -> timeout
 const timers = new Map();
 
-// Utility: calculate delay until start
 function msUntil(date) {
   const ts = typeof date === "string" ? new Date(date).getTime() : new Date(date).getTime();
   return Math.max(0, ts - Date.now());
 }
 
-// Utility: readable local time for logs
 function asLocalString(date) {
   try {
-    return new Date(date).toLocaleString(); // uses server local timezone
+    return new Date(date).toLocaleString();
   } catch {
     return String(date);
   }
 }
 
-// Utility: build matchStart payload for frontend
 function buildPayload(t) {
   return {
     rom: t.game === "NHL 95" ? "NHL_95.bin" : "NHL_94.bin",
@@ -28,7 +26,6 @@ function buildPayload(t) {
   };
 }
 
-// Clear an existing timer for a tournament (protect against re-scheduling)
 function clearTimer(tournamentId) {
   const prev = timers.get(tournamentId);
   if (prev) {
@@ -37,7 +34,6 @@ function clearTimer(tournamentId) {
   }
 }
 
-// Schedule a single tournament start
 function scheduleTournamentStart(t, io) {
   if (!t?.startTime) {
     console.warn(`⚠️ Tournament "${t?.name || t?._id}" has no startTime, skipping`);
@@ -73,6 +69,8 @@ function scheduleTournamentStart(t, io) {
 
       io.to(fresh._id.toString()).emit("matchStart", buildPayload(fresh));
       console.log(`🚨 Emitted matchStart for "${fresh.name}" (${fresh._id})`);
+
+      await emitTournamentSchedule(io); // ✅ Refresh lobby after status change
     } catch (err) {
       console.error(`⚠️ Failed to start tournament "${t.name}":`, err.message);
     } finally {
@@ -83,41 +81,18 @@ function scheduleTournamentStart(t, io) {
   timers.set(t._id.toString(), timeout);
 }
 
-// Schedule all tournaments on boot
 async function scheduleAllTournaments(io) {
   try {
     const upcoming = await Tournament.find({ status: "scheduled", startTime: { $ne: null } }).lean();
     console.log(`📋 Found ${upcoming.length} scheduled tournament(s)`);
     upcoming.forEach((t) => scheduleTournamentStart(t, io));
 
-    // Emit tournament lobby data
-    const visible = upcoming.map((t) => ({
-      id: t._id,
-      name: t.name,
-      startTime: t.startTime,
-      game: t.game,
-      prizePool: t.prizeAmount,
-      status: t.status,
-    }));
-
-    if (visible.length === 0) {
-      visible.push({
-        id: "dummy",
-        name: "No tournaments scheduled",
-        startTime: null,
-        game: "TBD",
-        prizePool: 0,
-        status: "placeholder",
-      });
-    }
-
-    io.emit("tournamentSchedule", visible);
+    await emitTournamentSchedule(io); // ✅ Emit full daily schedule
   } catch (err) {
     console.error("⚠️ Failed to fetch tournaments:", err.message);
   }
 }
 
-// Optional helper: reschedule one by ID
 async function rescheduleTournamentById(tournamentId, io) {
   try {
     const t = await Tournament.findById(tournamentId);
@@ -135,7 +110,6 @@ async function rescheduleTournamentById(tournamentId, io) {
   }
 }
 
-// 🔁 Watch Sit‑n‑Go tables and emit matchStart when full
 async function watchSitNGoTables(io) {
   console.log("👀 Watching Sit‑n‑Go tables…");
 
