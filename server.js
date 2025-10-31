@@ -62,6 +62,35 @@ app.use('/api/tournaments', require('./routes/tournaments-join'));
 app.get("/", (_req, res) => res.send("Retro Rumble Arena backend is live 🐺"));
 app.get("/api/ping", (_req, res) => res.send("pong"));
 app.get("/ping", (_req, res) => res.send("pong"));
+app.get('/api/matchstates', async (req, res) => {
+  const { tournamentId } = req.query;
+  if (!tournamentId) {
+    return res.status(400).json({ error: 'Missing tournamentId' });
+  }
+
+  if (!redis) {
+    return res.status(500).json({ error: 'Redis not available' });
+  }
+
+  try {
+    const keys = await redis.keys('match:*');
+    const all = await Promise.all(keys.map(k => redis.get(k)));
+    const parsed = all
+      .map(json => {
+        try {
+          return JSON.parse(json);
+        } catch {
+          return null;
+        }
+      })
+      .filter(m => m && m.tournamentId === tournamentId);
+
+    res.json(parsed);
+  } catch (err) {
+    console.error('❌ Failed to load matchstates:', err.message);
+    res.status(500).json({ error: 'Failed to load matchstates' });
+  }
+});
 
 // Socket.IO handlers
 io.on('connection', (socket) => {
