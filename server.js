@@ -199,27 +199,8 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   res.status(200).send();
 });
 
-// Redis helpers
-async function saveMatchState(matchId, state) {
-  if (!redis) return;
-  try {
-    await redis.set(`match:${matchId}`, JSON.stringify(state));
-    console.log(`💾 Saved matchState for ${matchId}`, state); // ✅ Moved inside try
-  } catch (err) {
-    console.error(`⚠️ Failed to save match state: ${err.message}`);
-  }
-}
-
-async function loadMatchState(matchId) {
-  if (!redis) return null;
-  try {
-    const data = await redis.get(`match:${matchId}`);
-    return data ? JSON.parse(data) : null;
-  } catch (err) {
-    console.error(`⚠️ Failed to load match state: ${err.message}`);
-    return null;
-  }
-}
+// Redis helpers 
+const { saveMatchState, loadMatchState } = require('./utils/matchState');
 
 // Custom routes
 app.post('/register-player', async (req, res) => {
@@ -332,7 +313,6 @@ app.get('/api/matchstates', async (req, res) => {
   }
 });
 
-module.exports.saveMatchState = saveMatchState;
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {

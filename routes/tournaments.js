@@ -1,7 +1,7 @@
 const express = require('express');
 const Tournament = require('../models/Tournament');
 const { generateBracket, createMatchState } = require('../utils/bracketManager');
-const { saveMatchState } = require('../server'); // ✅ Import Redis save helper
+const { saveMatchState, loadMatchState } = require('../utils/matchState');
 
 module.exports = function(io) {
   const router = express.Router();
