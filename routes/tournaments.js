@@ -38,7 +38,7 @@ module.exports = function(io) {
       res.status(500).json({ error: 'Server error' });
     }
   });
-  // debug log
+
   // POST /api/tournaments/register/:tournamentId
   router.post('/register/:tournamentId', async (req, res) => {
     const { tournamentId } = req.params;
@@ -62,6 +62,8 @@ module.exports = function(io) {
       tournament.registeredPlayers.push(playerId);
       await tournament.save();
 
+      console.log(`🧪 Tournament ${tournament.id} has ${tournament.registeredPlayers.length}/${tournament.maxPlayers} players`);
+
       // 🔥 Trigger matchStart if full
       if (
         tournament.maxPlayers &&
@@ -84,11 +86,10 @@ module.exports = function(io) {
             tournamentId: tournament.id // ✅ Inject tournamentId
           };
 
-          // ✅ Save to Redis
+          console.log(`🧪 Saving matchState for ${matchId}`);
           console.log('🧪 Generated matchState:', matchState);
           saveMatchState(matchId, matchState);
 
-          // ✅ Emit to players
           pair.forEach(playerId => {
             io.to(playerId).emit('matchStart', matchState);
           });
