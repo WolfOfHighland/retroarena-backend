@@ -203,6 +203,7 @@ async function saveMatchState(matchId, state) {
   if (!redis) return;
   try {
     await redis.set(`match:${matchId}`, JSON.stringify(state));
+    console.log(`💾 Saved matchState for ${matchId}`, state); // ✅ Moved inside try
   } catch (err) {
     console.error(`⚠️ Failed to save match state: ${err.message}`);
   }
