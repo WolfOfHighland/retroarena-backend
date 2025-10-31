@@ -330,6 +330,8 @@ app.get('/api/matchstates', async (req, res) => {
   }
 });
 
+module.exports.saveMatchState = saveMatchState;
+
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`🚀 Server listening on port ${PORT}`);

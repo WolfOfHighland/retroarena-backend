@@ -1,6 +1,7 @@
 const express = require('express');
 const Tournament = require('../models/Tournament');
 const { generateBracket, createMatchState } = require('../utils/bracketManager');
+const { saveMatchState } = require('../server'); // ✅ Import Redis save helper
 
 module.exports = function(io) {
   const router = express.Router();
@@ -80,9 +81,13 @@ module.exports = function(io) {
               round,
               matchIndex: index,
             }),
-            tournamentId // ✅ Inject tournamentId here
+            tournamentId // ✅ Inject tournamentId
           };
 
+          // ✅ Save to Redis
+          saveMatchState(matchId, matchState);
+
+          // ✅ Emit to players
           pair.forEach(playerId => {
             io.to(playerId).emit('matchStart', matchState);
           });
