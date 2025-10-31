@@ -122,6 +122,9 @@ if (process.env.REDIS_URL) {
   const pubClient = createClient({ url: process.env.REDIS_URL });
   const subClient = pubClient.duplicate();
   redis = pubClient;
+  
+  const { setRedis } = require('./utils/matchState');
+  setRedis(redis);
 
   (async () => {
     try {

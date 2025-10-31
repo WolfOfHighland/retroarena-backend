@@ -1,10 +1,14 @@
 const fs = require('fs');
 const path = require('path');
-const { redis } = require('../server');
+let redisClient = null;
+
+function setRedis(client) {
+  redisClient = client;
+}
 
 function saveMatchState(matchId, matchState) {
-  if (redis) {
-    redis.set(`match:${matchId}`, JSON.stringify(matchState))
+  if (redisClient) {
+    redisClient.set(`match:${matchId}`, JSON.stringify(matchState))
       .then(() => {
         console.log(`💾 Saved matchState to Redis for ${matchId}`, matchState);
       })
@@ -19,9 +23,9 @@ function saveMatchState(matchId, matchState) {
 }
 
 async function loadMatchState(matchId) {
-  if (redis) {
+  if (redisClient) {
     try {
-      const data = await redis.get(`match:${matchId}`);
+      const data = await redisClient.get(`match:${matchId}`);
       return data ? JSON.parse(data) : null;
     } catch (err) {
       console.error(`⚠️ Redis load failed for ${matchId}: ${err.message}`);
@@ -37,4 +41,4 @@ async function loadMatchState(matchId) {
   }
 }
 
-module.exports = { saveMatchState, loadMatchState };
+module.exports = { saveMatchState, loadMatchState, setRedis };
