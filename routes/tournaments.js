@@ -81,7 +81,7 @@ module.exports = function(io) {
               round,
               matchIndex: index,
             }),
-            tournamentId // ✅ Inject tournamentId
+            tournamentId: tournament:id // ✅ Inject tournamentId
           };
 
           // ✅ Save to Redis
