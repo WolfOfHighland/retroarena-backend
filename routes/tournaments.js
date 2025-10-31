@@ -38,7 +38,7 @@ module.exports = function(io) {
       res.status(500).json({ error: 'Server error' });
     }
   });
-
+  // debug log
   // POST /api/tournaments/register/:tournamentId
   router.post('/register/:tournamentId', async (req, res) => {
     const { tournamentId } = req.params;
