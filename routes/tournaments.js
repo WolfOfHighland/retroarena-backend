@@ -85,6 +85,7 @@ module.exports = function(io) {
           };
 
           // ✅ Save to Redis
+          console.log('🧪 Generated matchState:', matchState);
           saveMatchState(matchId, matchState);
 
           // ✅ Emit to players

@@ -7,10 +7,17 @@ function setRedis(client) {
 }
 
 function saveMatchState(matchId, matchState) {
+  console.log(`🧪 Calling saveMatchState for ${matchId}`);
+  console.log(`🧪 matchState payload:`, matchState);
+
   if (redisClient) {
     redisClient.set(`match:${matchId}`, JSON.stringify(matchState))
       .then(() => {
         console.log(`💾 Saved matchState to Redis for ${matchId}`, matchState);
+        return redisClient.keys('match:*');
+      })
+      .then(keys => {
+        console.log('🧪 Redis keys after save:', keys);
       })
       .catch(err => {
         console.error(`⚠️ Redis save failed for ${matchId}: ${err.message}`);
