@@ -75,17 +75,20 @@ app.get('/api/matchstates', async (req, res) => {
   try {
     const keys = await redis.keys('match:*');
     const all = await Promise.all(keys.map(k => redis.get(k)));
-    const parsed = all
-      .map(json => {
-        try {
-          return JSON.parse(json);
-        } catch {
-          return null;
-        }
-      })
-      .filter(m => m && m.tournamentId === tournamentId);
+    const parsed = all.map((json, i) => {
+      try {
+        const obj = JSON.parse(json);
+        console.log(`🧪 Redis match ${keys[i]}:`, obj);
+        return obj;
+      } catch {
+        return null;
+      }
+    });
 
-    res.json(parsed);
+    const filtered = parsed.filter(m => m && m.tournamentId === tournamentId);
+    console.log(`🧪 Filtered matchStates for ${tournamentId}:`, filtered);
+
+    res.json(filtered);
   } catch (err) {
     console.error('❌ Failed to load matchstates:', err.message);
     res.status(500).json({ error: 'Failed to load matchstates' });
