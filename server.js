@@ -299,6 +299,37 @@ app.post("/start-match", async (req, res) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 });
+
+app.get('/api/matchstates', async (req, res) => {
+  const { tournamentId } = req.query;
+  if (!tournamentId) {
+    return res.status(400).json({ error: 'Missing tournamentId' });
+  }
+
+  if (!redis) {
+    return res.status(500).json({ error: 'Redis not available' });
+  }
+
+  try {
+    const keys = await redis.keys(`match:*`);
+    const all = await Promise.all(keys.map(k => redis.get(k)));
+    const parsed = all
+      .map(json => {
+        try {
+          return JSON.parse(json);
+        } catch {
+          return null;
+        }
+      })
+      .filter(m => m && m.tournamentId === tournamentId);
+
+    res.json(parsed);
+  } catch (err) {
+    console.error('❌ Failed to load matchstates:', err.message);
+    res.status(500).json({ error: 'Failed to load matchstates' });
+  }
+});
+
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`🚀 Server listening on port ${PORT}`);

@@ -71,14 +71,17 @@ module.exports = function(io) {
 
         bracket.forEach((pair, index) => {
           const matchId = `${tournament.id}-r${round}-m${index}`;
-          const matchState = createMatchState(matchId, pair, {
-            rom: tournament.rom,
-            core: tournament.core,
-            goalieMode: tournament.goalieMode,
-            periodLength: tournament.periodLength,
-            round,
-            matchIndex: index,
-          });
+          const matchState = {
+            ...createMatchState(matchId, pair, {
+              rom: tournament.rom,
+              core: tournament.core,
+              goalieMode: tournament.goalieMode,
+              periodLength: tournament.periodLength,
+              round,
+              matchIndex: index,
+            }),
+            tournamentId // ✅ Inject tournamentId here
+          };
 
           pair.forEach(playerId => {
             io.to(playerId).emit('matchStart', matchState);
