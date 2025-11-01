@@ -11,10 +11,10 @@ module.exports = function (io) {
   const router = express.Router();
 
   router.post('/join/:id', async (req, res) => {
-	console.log('Entered /join/:id route'); // Confirm route is
+    console.log('Entered /join/:id route');
     try {
       const { id } = req.params;
-      const { playerId } = req.body;
+      const { playerId, displayName = 'Guest' } = req.body;
 
       console.log(`🧪 Join request for ${id} from ${playerId}`);
 
@@ -41,8 +41,14 @@ module.exports = function (io) {
         return res.status(200).json({ message: 'Already joined' });
       }
 
-      // ✅ Push and persist
-      tournament.registeredPlayers.push({ id: playerId });
+      // ✅ Push and persist full player object
+      tournament.registeredPlayers.push({
+        id: playerId,
+        displayName,
+        isGuest: true,
+        joinedAt: new Date()
+      });
+
       await tournament.save();
       console.log(`✅ Saved ${playerId} to tournament ${tournament.id}`);
 
@@ -84,6 +90,13 @@ module.exports = function (io) {
           });
         }
 
+        // 💰 Calculate prize pool with rake
+        const rakePercent = tournament.rakePercent ?? 0.10;
+        const netEntry = tournament.entryFee * (1 - rakePercent);
+        tournament.prizeAmount = netEntry * tournament.maxPlayers;
+        await tournament.save();
+        console.log(`💰 Prize pool updated to $${tournament.prizeAmount}`);
+
         // 🧬 Auto-clone tournament
         const newTournament = new Tournament({
           id: `${tournament.id}-clone-${Date.now()}`,
@@ -101,6 +114,7 @@ module.exports = function (io) {
           elimination: tournament.elimination,
           rom: tournament.rom,
           core: tournament.core,
+          rakePercent: tournament.rakePercent // preserve rake config
         });
 
         await newTournament.save();

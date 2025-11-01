@@ -23,6 +23,7 @@ const TournamentSchema = new mongoose.Schema({
     default: []
   },
   entryFee: { type: Number, default: 0 },
+  rakePercent: { type: Number, default: 0.10 },
   maxPlayers: { type: Number },
   prizeType: { type: String, enum: ["guaranteed", "dynamic"], default: "dynamic" },
   prizeAmount: { type: Number, default: 0 },
