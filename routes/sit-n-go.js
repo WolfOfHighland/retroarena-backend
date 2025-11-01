@@ -54,7 +54,6 @@ router.get('/', async (req, res) => {
     });
 
     console.log('🧪 Final enriched payload:', enriched);
-
     res.status(200).json(enriched);
   } catch (err) {
     console.error('❌ Sit-n-Go fetch error:', err.message);
@@ -88,7 +87,6 @@ router.post('/clone/:id', async (req, res) => {
     });
 
     await clone.save();
-
     console.log(`🧬 Clone created: ${clone.id}`);
     res.status(201).json({ message: 'Clone created', clone });
   } catch (err) {
@@ -128,7 +126,7 @@ router.post('/recalculate-prizes', async (req, res) => {
   }
 });
 
-// ✅ POST /api/sit-n-go/create-test
+// POST /api/sit-n-go/create-test
 router.post('/create-test', async (req, res) => {
   try {
     const testTournament = new Tournament({
