@@ -11,6 +11,7 @@ module.exports = function (io) {
   const router = express.Router();
 
   router.post('/join/:id', async (req, res) => {
+	console.log('Entered /join/:id route'); Confirm route is
     try {
       const { id } = req.params;
       const { playerId } = req.body;
