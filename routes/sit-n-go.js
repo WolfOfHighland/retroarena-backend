@@ -97,7 +97,7 @@ router.post('/clone/:id', async (req, res) => {
   }
 });
 
-// ✅ POST /api/sit-n-go/recalculate-prizes
+// POST /api/sit-n-go/recalculate-prizes
 router.post('/recalculate-prizes', async (req, res) => {
   try {
     const tournaments = await Tournament.find({
@@ -124,6 +124,37 @@ router.post('/recalculate-prizes', async (req, res) => {
     res.status(200).json({ message: `Updated ${updatedCount} tournaments.` });
   } catch (err) {
     console.error('❌ Prize recalculation error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ✅ POST /api/sit-n-go/create-test
+router.post('/create-test', async (req, res) => {
+  try {
+    const testTournament = new Tournament({
+      id: `nhl95-auto-2-max-test-${Date.now()}`,
+      name: 'NHL 95 Auto (2‑max)',
+      type: 'sit-n-go',
+      maxPlayers: 2,
+      entryFee: 0,
+      prizeType: 'dynamic',
+      prizeAmount: 0,
+      elimination: 'single',
+      goalieMode: 'auto',
+      periodLength: 5,
+      rom: 'NHL_95.bin',
+      core: 'genesis_plus_gx',
+      registeredPlayers: [],
+      status: 'scheduled',
+      game: 'NHL 95',
+      rakePercent: 0.10
+    });
+
+    await testTournament.save();
+    console.log(`🧪 Test tournament created: ${testTournament.id}`);
+    res.status(201).json({ message: 'Test tournament created', tournament: testTournament });
+  } catch (err) {
+    console.error('❌ Test tournament creation error:', err.message);
     res.status(500).json({ error: 'Server error' });
   }
 });
