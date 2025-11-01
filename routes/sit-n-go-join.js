@@ -110,7 +110,7 @@ module.exports = function (io) {
 
       res.status(200).json({ message: 'Joined successfully' });
     } catch (err) {
-      console.error('❌ Join error:', err);
+      console.error('❌ Join error:', err.stack || err);
       res.status(500).json({ error: 'Server error' });
     }
   });
