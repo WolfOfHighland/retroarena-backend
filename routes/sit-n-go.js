@@ -34,24 +34,24 @@ router.get('/', async (req, res) => {
     })));
 
     const enriched = waiting.map(t => {
-  const rake = t.rakePercent ?? 0.10;
-  const netEntry = t.entryFee * (1 - rake);
-  const prizeAmount = netEntry * getMaxPlayers(t.maxPlayers);
+      const rake = t.rakePercent ?? 0.10;
+      const netEntry = t.entryFee * (1 - rake);
+      const prizeAmount = netEntry * getMaxPlayers(t.maxPlayers);
 
-  return {
-    id: t.id || t._id.toString(),
-    name: t.name,
-    entryFee: t.entryFee,
-    registeredPlayers: Array.isArray(t.registeredPlayers) ? t.registeredPlayers : [],
-    prizeType: t.prizeType,
-    prizeAmount,
-    game: t.game,
-    goalieMode: t.goalieMode,
-    elimination: t.elimination,
-    maxPlayers: getMaxPlayers(t.maxPlayers),
-    status: t.status || 'scheduled'
-  };
-});
+      return {
+        id: t.id || t._id.toString(),
+        name: t.name,
+        entryFee: t.entryFee,
+        registeredPlayers: Array.isArray(t.registeredPlayers) ? t.registeredPlayers : [],
+        prizeType: t.prizeType,
+        prizeAmount,
+        game: t.game,
+        goalieMode: t.goalieMode,
+        elimination: t.elimination,
+        maxPlayers: getMaxPlayers(t.maxPlayers),
+        status: t.status || 'scheduled'
+      };
+    });
 
     console.log('🧪 Final enriched payload:', enriched);
 
@@ -84,6 +84,7 @@ router.post('/clone/:id', async (req, res) => {
       registeredPlayers: [],
       status: 'scheduled',
       game: original.game,
+      rakePercent: original.rakePercent ?? 0.10
     });
 
     await clone.save();
@@ -92,6 +93,37 @@ router.post('/clone/:id', async (req, res) => {
     res.status(201).json({ message: 'Clone created', clone });
   } catch (err) {
     console.error('❌ Clone error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ✅ POST /api/sit-n-go/recalculate-prizes
+router.post('/recalculate-prizes', async (req, res) => {
+  try {
+    const tournaments = await Tournament.find({
+      type: 'sit-n-go',
+      status: 'scheduled'
+    });
+
+    let updatedCount = 0;
+
+    for (const t of tournaments) {
+      const rake = t.rakePercent ?? 0.10;
+      const netEntry = t.entryFee * (1 - rake);
+      const max = getMaxPlayers(t.maxPlayers);
+      const newPrize = netEntry * max;
+
+      if (t.prizeAmount !== newPrize) {
+        t.prizeAmount = newPrize;
+        await t.save();
+        updatedCount++;
+        console.log(`💰 Updated prize pool for ${t.id} to $${newPrize}`);
+      }
+    }
+
+    res.status(200).json({ message: `Updated ${updatedCount} tournaments.` });
+  } catch (err) {
+    console.error('❌ Prize recalculation error:', err.message);
     res.status(500).json({ error: 'Server error' });
   }
 });
