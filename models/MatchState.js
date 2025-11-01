@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const MatchStateSchema = new mongoose.Schema({
   matchId: { type: String, required: true },
+  tournamentId: { type: String, required: true }, // ✅ Add this line
   rom: String,
   core: String,
   goalieMode: String,
