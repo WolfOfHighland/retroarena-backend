@@ -63,19 +63,20 @@ module.exports = function (io) {
 
           // 💾 Save to MongoDB
           const matchDoc = new MatchState({
-            matchId,
-            tournamentId: tournament.id,
-            rom: tournament.rom,
-            core: tournament.core,
-            goalieMode: tournament.goalieMode,
-            periodLength: tournament.periodLength
-          });
+  		matchId,
+ 		tournamentId: tournament.id,
+  		players: pair,
+  		round,
+ 		matchIndex,
+  		rom: tournament.rom,
+  		core: tournament.core,
+  		goalieMode: tournament.goalieMode,
+  		periodLength: tournament.periodLength
+	    });
 
-          matchDoc.save().then(() => {
-            console.log(`💾 Saved matchState for ${matchId}`);
-          }).catch(err => {
-            console.error(`❌ Failed to save matchState for ${matchId}:`, err);
-          });
+          await matchDoc.save();
+          
+          console.log(`💾 Saved matchState for ${matchId}`);
 
           // 🎮 Emit to players
           pair.forEach(player => {
