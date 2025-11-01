@@ -1,7 +1,7 @@
 const express = require('express');
 const Tournament = require('../models/Tournament');
 const { generateBracket, createMatchState } = require('../utils/bracketManager');
-const { saveMatchState, loadMatchState } = require('../utils/matchState');
+const { saveMatchState, loadMatchState, loadMatchStatesByTournament } = require('../utils/matchState');
 
 module.exports = function(io) {
   const router = express.Router();
@@ -105,6 +105,22 @@ module.exports = function(io) {
     } catch (err) {
       console.error('❌ Registration error:', err.message);
       return res.status(500).json({ error: 'Server error' });
+    }
+  });
+
+  // ✅ NEW: GET /api/tournaments/:id/matches
+  router.get('/:id/matches', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+      const matches = await loadMatchStatesByTournament(id); // You may need to implement this helper
+      if (!matches || matches.length === 0) {
+        return res.status(200).json([]);
+      }
+      res.status(200).json(matches);
+    } catch (err) {
+      console.error(`❌ Failed to load matches for ${id}:`, err.message);
+      res.status(500).json({ error: 'Failed to load matches' });
     }
   });
 
