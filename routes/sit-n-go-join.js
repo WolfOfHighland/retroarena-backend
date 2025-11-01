@@ -1,6 +1,6 @@
 const express = require('express');
 const Tournament = require('../models/Tournament');
-const MatchState = require('../models/MatchState'); // ✅ Add this
+const MatchState = require('../models/MatchState');
 const {
   generateBracket,
   createMatchState,
@@ -50,7 +50,8 @@ module.exports = function (io) {
         const round = 1;
         const bracket = generateBracket(tournament.registeredPlayers.map(p => p.id));
 
-        bracket.forEach((pair, index) => {
+        for (let index = 0; index < bracket.length; index++) {
+          const pair = bracket[index];
           const matchId = `${tournament.id}-r${round}-m${index}`;
           const matchState = createMatchState(matchId, pair, {
             rom: tournament.rom,
@@ -61,28 +62,26 @@ module.exports = function (io) {
             matchIndex: index,
           });
 
-          // 💾 Save to MongoDB
           const matchDoc = new MatchState({
-  		matchId,
- 		tournamentId: tournament.id,
-  		players: pair,
-  		round,
- 		matchIndex,
-  		rom: tournament.rom,
-  		core: tournament.core,
-  		goalieMode: tournament.goalieMode,
-  		periodLength: tournament.periodLength
-	    });
+            matchId,
+            tournamentId: tournament.id,
+            players: pair,
+            round,
+            matchIndex: index,
+            rom: tournament.rom,
+            core: tournament.core,
+            goalieMode: tournament.goalieMode,
+            periodLength: tournament.periodLength
+          });
 
+          console.log(`🧪 Saving matchDoc:`, matchDoc);
           await matchDoc.save();
-          
           console.log(`💾 Saved matchState for ${matchId}`);
 
-          // 🎮 Emit to players
           pair.forEach(player => {
             io.to(player).emit('matchStart', matchState);
           });
-        });
+        }
 
         // 🧬 Auto-clone tournament
         const newTournament = new Tournament({
