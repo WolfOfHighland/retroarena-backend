@@ -1,5 +1,6 @@
 const express = require('express');
 const Tournament = require('../models/Tournament');
+const MatchState = require('../models/MatchState'); // ✅ Add this
 const {
   generateBracket,
   createMatchState,
@@ -11,20 +12,22 @@ module.exports = function (io) {
 
   router.post('/join/:id', async (req, res) => {
     try {
-      const tournament = await Tournament.findOne({ id: req.params.id });
-      if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
-
+      const { id } = req.params;
       const { playerId } = req.body;
+
+      console.log(`🧪 Join request for ${id} from ${playerId}`);
+
       if (!playerId) return res.status(400).json({ error: 'Missing playerId' });
 
-      // 🧼 Normalize legacy string entries to object format
-      if (Array.isArray(tournament.registeredPlayers)) {
-        tournament.registeredPlayers = tournament.registeredPlayers.map(p =>
-          typeof p === 'string' ? { id: p } : p
-        );
-      }
+      const tournament = await Tournament.findOne({ id });
+      if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
-      // 🚫 Enforce maxPlayers limit
+      // 🧼 Normalize legacy entries
+      tournament.registeredPlayers = Array.isArray(tournament.registeredPlayers)
+        ? tournament.registeredPlayers.map(p => (typeof p === 'string' ? { id: p } : p))
+        : [];
+
+      // 🚫 Enforce maxPlayers
       if (tournament.registeredPlayers.length >= tournament.maxPlayers) {
         console.log(`🚫 Tournament ${tournament.id} is full`);
         return res.status(403).json({ error: 'Tournament is full' });
@@ -58,7 +61,23 @@ module.exports = function (io) {
             matchIndex: index,
           });
 
-          console.log(`🎮 Emitting matchStart for ${matchId}`);
+          // 💾 Save to MongoDB
+          const matchDoc = new MatchState({
+            matchId,
+            tournamentId: tournament.id,
+            rom: tournament.rom,
+            core: tournament.core,
+            goalieMode: tournament.goalieMode,
+            periodLength: tournament.periodLength
+          });
+
+          matchDoc.save().then(() => {
+            console.log(`💾 Saved matchState for ${matchId}`);
+          }).catch(err => {
+            console.error(`❌ Failed to save matchState for ${matchId}:`, err);
+          });
+
+          // 🎮 Emit to players
           pair.forEach(player => {
             io.to(player).emit('matchStart', matchState);
           });
@@ -90,7 +109,7 @@ module.exports = function (io) {
 
       res.status(200).json({ message: 'Joined successfully' });
     } catch (err) {
-      console.error('❌ Join error:', err.message);
+      console.error('❌ Join error:', err);
       res.status(500).json({ error: 'Server error' });
     }
   });
