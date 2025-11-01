@@ -48,4 +48,47 @@ async function loadMatchState(matchId) {
   }
 }
 
-module.exports = { saveMatchState, loadMatchState, setRedis };
+async function loadMatchStatesByTournament(tournamentId) {
+  const matchStates = [];
+
+  if (redisClient) {
+    try {
+      const keys = await redisClient.keys('match:*');
+      for (const key of keys) {
+        const raw = await redisClient.get(key);
+        if (!raw) continue;
+
+        const parsed = JSON.parse(raw);
+        if (parsed.tournamentId === tournamentId) {
+          matchStates.push(parsed);
+        }
+      }
+    } catch (err) {
+      console.error(`⚠️ Redis bulk load failed: ${err.message}`);
+    }
+  } else {
+    const dataDir = path.join(__dirname, '..', 'data');
+    const files = fs.readdirSync(dataDir);
+
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue;
+
+      const filePath = path.join(dataDir, file);
+      const raw = fs.readFileSync(filePath);
+      const parsed = JSON.parse(raw);
+
+      if (parsed.tournamentId === tournamentId) {
+        matchStates.push(parsed);
+      }
+    }
+  }
+
+  return matchStates;
+}
+
+module.exports = {
+  saveMatchState,
+  loadMatchState,
+  loadMatchStatesByTournament,
+  setRedis
+};
