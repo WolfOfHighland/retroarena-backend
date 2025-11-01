@@ -33,19 +33,25 @@ router.get('/', async (req, res) => {
       max: getMaxPlayers(t.maxPlayers)
     })));
 
-    const enriched = waiting.map(t => ({
-      id: t.id || t._id.toString(),
-      name: t.name,
-      entryFee: t.entryFee,
-      registeredPlayers: Array.isArray(t.registeredPlayers) ? t.registeredPlayers : [],
-      prizeType: t.prizeType,
-      prizeAmount: t.prizeAmount,
-      game: t.game,
-      goalieMode: t.goalieMode,
-      elimination: t.elimination,
-      maxPlayers: getMaxPlayers(t.maxPlayers),
-      status: t.status || 'scheduled',
-    }));
+    const enriched = waiting.map(t => {
+  const rake = t.rakePercent ?? 0.10;
+  const netEntry = t.entryFee * (1 - rake);
+  const prizeAmount = netEntry * getMaxPlayers(t.maxPlayers);
+
+  return {
+    id: t.id || t._id.toString(),
+    name: t.name,
+    entryFee: t.entryFee,
+    registeredPlayers: Array.isArray(t.registeredPlayers) ? t.registeredPlayers : [],
+    prizeType: t.prizeType,
+    prizeAmount,
+    game: t.game,
+    goalieMode: t.goalieMode,
+    elimination: t.elimination,
+    maxPlayers: getMaxPlayers(t.maxPlayers),
+    status: t.status || 'scheduled'
+  };
+});
 
     console.log('🧪 Final enriched payload:', enriched);
 
