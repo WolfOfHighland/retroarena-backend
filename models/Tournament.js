@@ -11,14 +11,24 @@ const TournamentSchema = new mongoose.Schema({
   periodLength: { type: Number, default: 5 },
   status: { type: String, default: "scheduled" },
   type: { type: String, default: "sit-n-go" },
-  registeredPlayers: { type: [String], default: [] }, // ✅ Fixed
+  registeredPlayers: {
+    type: [
+      {
+        id: { type: String, required: true },
+        displayName: String,
+        isGuest: Boolean,
+        joinedAt: { type: Date, default: Date.now }
+      }
+    ],
+    default: []
+  },
   entryFee: { type: Number, default: 0 },
   maxPlayers: { type: Number },
   prizeType: { type: String, enum: ["guaranteed", "dynamic"], default: "dynamic" },
   prizeAmount: { type: Number, default: 0 },
   elimination: { type: String, enum: ["single", "double"], default: "single" },
   isLive: { type: Boolean, default: false },
-  hasStarted: { type: Boolean, default: false },
+  hasStarted: { type: Boolean, default: false }
 });
 
 module.exports = mongoose.model("Tournament", TournamentSchema);

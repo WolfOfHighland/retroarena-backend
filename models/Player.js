@@ -1,4 +1,3 @@
-// models/Player.js
 const mongoose = require("mongoose");
 
 const playerSchema = new mongoose.Schema({
@@ -10,13 +9,24 @@ const playerSchema = new mongoose.Schema({
   email: {
     type: String,
     required: true,
-    unique: true,   // ensures no duplicate registrations
+    unique: true,
     lowercase: true,
     trim: true,
   },
   country: {
     type: String,
     default: "Unknown",
+  },
+  avatar: {
+    type: String,
+    default: "default.png"
+  },
+  controllerType: {
+    type: String
+  },
+  isGuest: {
+    type: Boolean,
+    default: false
   },
   createdAt: {
     type: Date,
