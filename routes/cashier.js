@@ -5,7 +5,7 @@ const Player = require('../models/Player');
 // POST /api/cashier/deposit
 router.post('/deposit', async (req, res) => {
   const { playerId, amount } = req.body;
-  const player = await Player.findOne({ id: playerId });
+  const player = await Player.findOne({ username: playerId });
   if (!player) return res.status(404).json({ error: 'Player not found' });
 
   player.balance += amount;
@@ -16,7 +16,7 @@ router.post('/deposit', async (req, res) => {
 // POST /api/cashier/withdraw
 router.post('/withdraw', async (req, res) => {
   const { playerId, amount } = req.body;
-  const player = await Player.findOne({ id: playerId });
+  const player = await Player.findOne({ username: playerId });
   if (!player) return res.status(404).json({ error: 'Player not found' });
 
   if (player.balance < amount) return res.status(400).json({ error: 'Insufficient funds' });
