@@ -60,6 +60,7 @@ app.use('/api/tournaments', require('./routes/tournaments-join'));
 app.use('/api/cashier', require('./routes/cashier'));
 const webhookRoutes = require('./routes/webhooks');
 app.use('/webhooks', webhookRoutes);
+console.log('✅ Webhook routes loaded');
 
 // Health checks
 app.get("/", (_req, res) => res.send("Retro Rumble Arena backend is live 🐺"));

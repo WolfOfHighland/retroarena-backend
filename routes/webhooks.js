@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const Player = require('../models/Player');
+console.log('📬 Stripe webhook route mounted at /webhooks/stripe-webhook');
 
 // Stripe requires raw body for signature verification
 router.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
