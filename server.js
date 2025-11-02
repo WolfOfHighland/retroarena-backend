@@ -57,6 +57,9 @@ app.use('/api/sit-n-go', require('./routes/sit-n-go'));
 app.use('/api/sit-n-go', require('./routes/sit-n-go-join')(io));
 app.use('/api/tournaments', require('./routes/tournaments')(io));
 app.use('/api/tournaments', require('./routes/tournaments-join'));
+app.use('/api/cashier', require('./routes/cashier'));
+const webhookRoutes = require('./routes/webhooks');
+app.use('/webhooks', webhookRoutes);
 
 // Health checks
 app.get("/", (_req, res) => res.send("Retro Rumble Arena backend is live 🐺"));
