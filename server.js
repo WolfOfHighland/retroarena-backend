@@ -204,38 +204,6 @@ if (process.env.MONGO_URI) {
   console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
 }
 
-// Stripe key check
-if (!process.env.STRIPE_SECRET_KEY) {
-  console.error('❌ STRIPE_SECRET_KEY is missing from environment');
-} else {
-  console.log(`🔐 Stripe key loaded: ${process.env.STRIPE_SECRET_KEY.slice(0, 10)}...`);
-}
-
-// Stripe webhook
-app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    console.error('❌ Webhook signature error:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    const matchId = session.success_url?.split('matchId=')[1];
-    io.to(matchId).emit('matchStart', {
-      rom: '/roms/NHL_95.bin',
-      core: 'genesis_plus_gx',
-      goalieMode: 'manual',
-      matchId,
-    });
-  }
-
-  res.status(200).send();
-});
 
 // Redis helpers 
 const { saveMatchState, loadMatchState } = require('./utils/matchState');
