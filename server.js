@@ -58,7 +58,6 @@ app.use('/api/sit-n-go', require('./routes/sit-n-go-join')(io));
 app.use('/api/tournaments', require('./routes/tournaments')(io));
 app.use('/api/tournaments', require('./routes/tournaments-join'));
 app.use('/api/cashier', require('./routes/cashier'));
-const webhookRoutes = require('./routes/webhooks');
 app.use('/webhooks', webhookRoutes);
 console.log('✅ Webhook routes loaded');
 
