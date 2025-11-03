@@ -85,4 +85,20 @@ router.post('/withdraw', async (req, res) => {
   res.status(200).json({ message: 'Withdrawal successful', balance: player.balance });
 });
 
+// ✅ NEW: GET /api/cashier/balance?username=Wolf
+router.get('/balance', async (req, res) => {
+  const { username } = req.query;
+  if (!username) return res.status(400).json({ error: 'Missing username' });
+
+  // Optional: block guest accounts
+  if (username.startsWith('guest')) {
+    return res.status(200).json({ balance: 0 });
+  }
+
+  const player = await Player.findOne({ username });
+  if (!player) return res.status(404).json({ error: 'Player not found' });
+
+  res.status(200).json({ balance: player.balance });
+});
+
 module.exports = router;
