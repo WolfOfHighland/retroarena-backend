@@ -1,23 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const Player = require('../models/Player');
-
-// POST /api/cashier/create-payment-intent
-router.post('/create-payment-intent', async (req, res) => {
-  const { amount, username } = req.body;
-  try {
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Stripe uses cents
-      currency: 'usd',
-      automatic_payment_methods: { enabled: true },
-      metadata: { username }
-    });
-    res.send({ clientSecret: paymentIntent.client_secret });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // POST /api/cashier/deposit
 router.post('/deposit', async (req, res) => {
