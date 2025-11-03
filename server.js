@@ -8,8 +8,8 @@ const mongoose = require('mongoose');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const { createClient } = require('redis');
 const cors = require('cors');
-const Stripe = require('stripe');
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const webhookRoutes = require('./routes/webhook');
+
 
 // Express setup
 const app = express();

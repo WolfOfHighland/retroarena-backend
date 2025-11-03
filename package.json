@@ -1,7 +1,7 @@
 {
   "name": "retrorumble-backend",
   "version": "1.0.0",
-  "description": "Backend server for Retro Rumble Arena with Socket.IO, MongoDB, and Stripe integration",
+  "description": "Backend server for Retro Rumble Arena with Socket.IO, MongoDB, and Xsolla integration",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -15,8 +15,7 @@
     "ioredis": "^5.7.0",
     "mongoose": "^7.8.7",
     "redis": "^5.8.2",
-    "socket.io": "^4.7.2",
-    "stripe": "^12.0.0"
+    "socket.io": "^4.7.2"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -25,7 +24,7 @@
     "retro",
     "gaming",
     "socket.io",
-    "stripe",
+    "xsolla",
     "mongodb",
     "express"
   ],

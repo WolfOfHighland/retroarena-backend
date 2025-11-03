@@ -1,48 +1,56 @@
 const express = require('express');
 const router = express.Router();
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const crypto = require('crypto');
 const Player = require('../models/Player');
-console.log('📬 Stripe webhook route mounted at /webhooks/stripe-webhook');
 
-// Stripe requires raw body for signature verification
-router.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
+console.log('📬 Xsolla webhook route mounted at /webhooks/xsolla-webhook');
+
+router.post('/xsolla-webhook', express.text({ type: '*/*' }), async (req, res) => {
+  const rawBody = req.body;
+  const signature = req.headers['authorization']?.replace('Signature ', '');
+  const secret = process.env.XSOLLA_SECRET_KEY;
+
+  const expectedSignature = crypto
+    .createHash('sha1')
+    .update(rawBody + secret)
+    .digest('hex');
+
+  if (signature !== expectedSignature) {
+    console.error('❌ Invalid Xsolla signature');
+    return res.status(403).send('Invalid signature');
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch (err) {
+    console.error('❌ Failed to parse Xsolla payload:', err.message);
+    return res.status(400).send('Invalid JSON');
+  }
+
+  const username = payload?.user?.id;
+  const amount = payload?.payment?.amount;
+
+  if (!username || !amount) {
+    console.warn('⚠️ Missing username or amount in payload');
+    return res.status(400).send('Invalid payload');
+  }
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    const player = await Player.findOne({ username });
+    if (!player) {
+      console.warn(`⚠️ Player not found: ${username}`);
+      return res.status(404).send('Player not found');
+    }
+
+    player.balance += amount;
+    await player.save();
+    console.log(`✅ Credited $${amount} to ${username}`);
+    res.status(200).send('OK');
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    console.error('❌ Error updating player balance:', err.message);
+    res.status(500).send('Internal server error');
   }
-
-  if (event.type === 'payment_intent.succeeded') {
-    const paymentIntent = event.data.object;
-    const username = paymentIntent.metadata?.username;
-    const amount = paymentIntent.amount_received / 100;
-
-    if (!username) {
-      console.warn('No username found in payment metadata');
-      return res.status(400).send('Missing username metadata');
-    }
-
-    try {
-      const player = await Player.findOne({ username });
-      if (!player) {
-        console.warn(`Player not found for username: ${username}`);
-        return res.status(404).send('Player not found');
-      }
-
-      player.balance += amount;
-      await player.save();
-      console.log(`Credited $${amount} to ${username}`);
-    } catch (err) {
-      console.error('Error updating player balance:', err.message);
-      return res.status(500).send('Internal server error');
-    }
-  }
-
-  res.json({ received: true });
 });
 
 module.exports = router;
