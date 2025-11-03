@@ -8,7 +8,7 @@ const mongoose = require('mongoose');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const { createClient } = require('redis');
 const cors = require('cors');
-const webhookRoutes = require('./routes/webhook');
+const webhookRoutes = require('./routes/webhooks');
 
 
 // Express setup
