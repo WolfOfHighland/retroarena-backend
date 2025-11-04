@@ -3,65 +3,73 @@ const router = express.Router();
 const https = require('https');
 const Player = require('../models/Player');
 
-// POST /api/cashier/create-xsolla-token
+// ✅ POST /api/cashier/create-xsolla-token
 router.post('/create-xsolla-token', async (req, res) => {
-  const { username, amount } = req.body;
-
-  const payload = JSON.stringify({
-    user: { id: username },
-    settings: {
-      currency: 'USD',
-      external_payment: false,
-      ui: { mode: 'desktop' }
-    },
-    purchase: {
-      virtual_currency: {
-        quantity: amount,
-        currency: 'USD'
-      }
+  try {
+    const { username, amount } = req.body;
+    if (!username || !amount) {
+      return res.status(400).json({ error: 'Missing username or amount' });
     }
-  });
 
-  const options = {
-    hostname: 'api.xsolla.com',
-    path: `/merchant/v2/merchants/${process.env.XSOLLA_PROJECT_ID}/token`,
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(payload),
-      'Authorization': 'Basic ' + Buffer.from(`${process.env.XSOLLA_API_KEY}:`).toString('base64')
-    }
-  };
-
-  const request = https.request(options, (response) => {
-    let data = '';
-    response.on('data', chunk => data += chunk);
-    response.on('end', () => {
-      try {
-        const parsed = JSON.parse(data);
-        if (parsed.token) {
-          res.json({ token: parsed.token });
-        } else {
-          console.error('❌ Unexpected Xsolla response:', parsed);
-          res.status(500).json({ error: 'Invalid response from Xsolla' });
+    const payload = JSON.stringify({
+      user: { id: username },
+      settings: {
+        currency: 'USD',
+        external_payment: false,
+        ui: { mode: 'desktop' }
+      },
+      purchase: {
+        virtual_currency: {
+          quantity: amount,
+          currency: 'USD'
         }
-      } catch (err) {
-        console.error('❌ Failed to parse Xsolla response:', err.message);
-        res.status(500).json({ error: 'Failed to parse response' });
       }
     });
-  });
 
-  request.on('error', (err) => {
-    console.error('❌ Xsolla token request failed:', err.message);
-    res.status(500).json({ error: 'Request failed' });
-  });
+    const options = {
+      hostname: 'api.xsolla.com',
+      path: `/merchant/v2/merchants/${process.env.XSOLLA_PROJECT_ID}/token`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        'Authorization': 'Basic ' + Buffer.from(`${process.env.XSOLLA_API_KEY}:`).toString('base64')
+      }
+    };
 
-  request.write(payload);
-  request.end();
+    const request = https.request(options, (response) => {
+      let data = '';
+      response.on('data', chunk => data += chunk);
+      response.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.token) {
+            res.json({ token: parsed.token });
+          } else {
+            console.error('❌ Unexpected Xsolla response:', parsed);
+            res.status(500).json({ error: 'Invalid response from Xsolla' });
+          }
+        } catch (err) {
+          console.error('❌ Failed to parse Xsolla response:', err.message);
+          res.status(500).json({ error: 'Failed to parse response' });
+        }
+      });
+    });
+
+    request.on('error', (err) => {
+      console.error('❌ Xsolla token request failed:', err.message);
+      res.status(500).json({ error: 'Request failed' });
+    });
+
+    request.write(payload);
+    request.end();
+  } catch (err) {
+    console.error('❌ Xsolla route crash:', err.stack || err.message);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
-// POST /api/cashier/deposit
+// ✅ POST /api/cashier/deposit
 router.post('/deposit', async (req, res) => {
   const { playerId, amount } = req.body;
   const player = await Player.findOne({ username: playerId });
@@ -72,7 +80,7 @@ router.post('/deposit', async (req, res) => {
   res.status(200).json({ message: 'Deposit successful', balance: player.balance });
 });
 
-// POST /api/cashier/withdraw
+// ✅ POST /api/cashier/withdraw
 router.post('/withdraw', async (req, res) => {
   const { playerId, amount } = req.body;
   const player = await Player.findOne({ username: playerId });
@@ -85,12 +93,11 @@ router.post('/withdraw', async (req, res) => {
   res.status(200).json({ message: 'Withdrawal successful', balance: player.balance });
 });
 
-// ✅ NEW: GET /api/cashier/balance?username=Wolf
+// ✅ GET /api/cashier/balance?username=Wolf
 router.get('/balance', async (req, res) => {
   const { username } = req.query;
   if (!username) return res.status(400).json({ error: 'Missing username' });
 
-  // Optional: block guest accounts
   if (username.startsWith('guest')) {
     return res.status(200).json({ balance: 0 });
   }
