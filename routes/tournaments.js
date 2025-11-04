@@ -1,7 +1,7 @@
 const express = require('express');
 const Tournament = require('../models/Tournament');
 const { generateBracket, createMatchState } = require('../utils/bracketManager');
-const { saveMatchState, loadMatchState, loadMatchStatesByTournament } = require('../utils/matchState');
+const { saveMatchState, loadMatchStatesByTournament } = require('../utils/matchState');
 
 module.exports = function(io) {
   const router = express.Router();
@@ -45,9 +45,20 @@ module.exports = function(io) {
     const { playerId } = req.body;
 
     try {
+      if (!playerId || !tournamentId) {
+        console.warn('⚠️ Missing playerId or tournamentId');
+        return res.status(400).json({ error: 'Missing playerId or tournamentId' });
+      }
+
+      if (playerId.startsWith('guest')) {
+        console.warn(`⚠️ Guest attempted to register: ${playerId}`);
+        return res.status(403).json({ error: 'Guests cannot register for tournaments' });
+      }
+
       const tournament = await Tournament.findOne({ id: tournamentId });
 
       if (!tournament) {
+        console.warn(`⚠️ Tournament not found: ${tournamentId}`);
         return res.status(404).json({ error: 'Tournament not found' });
       }
 
@@ -56,6 +67,7 @@ module.exports = function(io) {
       }
 
       if (tournament.registeredPlayers.includes(playerId)) {
+        console.warn(`⚠️ Player already registered: ${playerId}`);
         return res.status(400).json({ error: 'Player already registered' });
       }
 
@@ -83,7 +95,7 @@ module.exports = function(io) {
               round,
               matchIndex: index,
             }),
-            tournamentId: tournament.id // ✅ Inject tournamentId
+            tournamentId: tournament.id
           };
 
           console.log(`🧪 Saving matchState for ${matchId}`);
@@ -103,17 +115,17 @@ module.exports = function(io) {
 
       return res.status(200).json({ message: 'Registered for tournament', tournament });
     } catch (err) {
-      console.error('❌ Registration error:', err.message);
-      return res.status(500).json({ error: 'Server error' });
+      console.error('❌ Registration error:', err.stack || err.message);
+      return res.status(500).json({ error: 'Server error during registration' });
     }
   });
 
-  // ✅ NEW: GET /api/tournaments/:id/matches
+  // GET /api/tournaments/:id/matches
   router.get('/:id/matches', async (req, res) => {
     const { id } = req.params;
 
     try {
-      const matches = await loadMatchStatesByTournament(id); // You may need to implement this helper
+      const matches = await loadMatchStatesByTournament(id);
       if (!matches || matches.length === 0) {
         return res.status(200).json([]);
       }
