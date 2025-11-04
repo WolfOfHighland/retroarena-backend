@@ -1,6 +1,7 @@
 const express = require('express');
 const Tournament = require('../models/Tournament');
 const MatchState = require('../models/MatchState');
+const User = require('../models/User'); // Assuming you have a User model
 const {
   generateBracket,
   createMatchState,
@@ -17,11 +18,18 @@ module.exports = function (io) {
       const { playerId, displayName = 'Guest' } = req.body;
 
       console.log(`🧪 Join request for ${id} from ${playerId}`);
-
       if (!playerId) return res.status(400).json({ error: 'Missing playerId' });
 
       const tournament = await Tournament.findOne({ id });
       if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+
+      const user = await User.findOne({ username: playerId });
+      if (!user) return res.status(404).json({ error: 'User not found' });
+
+      if (user.wallet < tournament.entryFee) {
+        console.warn(`[Join Blocked] ${playerId} has $${user.wallet}, needs $${tournament.entryFee}`);
+        return res.status(403).json({ error: 'Insufficient wallet balance' });
+      }
 
       // 🧼 Normalize legacy entries
       tournament.registeredPlayers = Array.isArray(tournament.registeredPlayers)
@@ -40,6 +48,11 @@ module.exports = function (io) {
         console.log(`⚠️ Player ${playerId} already joined ${tournament.name}`);
         return res.status(200).json({ message: 'Already joined' });
       }
+
+      // 💸 Deduct wallet before saving
+      user.wallet -= tournament.entryFee;
+      await user.save();
+      console.log(`💸 Deducted $${tournament.entryFee} from ${playerId}`);
 
       // ✅ Push and persist full player object
       tournament.registeredPlayers.push({
@@ -114,7 +127,7 @@ module.exports = function (io) {
           elimination: tournament.elimination,
           rom: tournament.rom,
           core: tournament.core,
-          rakePercent: tournament.rakePercent // preserve rake config
+          rakePercent: tournament.rakePercent
         });
 
         await newTournament.save();
