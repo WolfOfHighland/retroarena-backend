@@ -12,28 +12,23 @@ const getMaxPlayers = (val) => {
 // GET /api/sit-n-go
 router.get('/', async (req, res) => {
   try {
+    const showAll = req.query.all === 'true';
+
     const tournaments = await Tournament.find({
       type: 'sit-n-go',
-      status: 'scheduled'
+      status: 'scheduled',
+      startTime: null
     });
 
-    const waiting = tournaments
-      .filter(t => {
-        const max = getMaxPlayers(t.maxPlayers);
-        const reg = Array.isArray(t.registeredPlayers) ? t.registeredPlayers.length : 0;
-        return reg < max;
-      })
-      .slice(0, 3);
+    const filtered = showAll
+      ? tournaments
+      : tournaments.filter(t => {
+          const max = getMaxPlayers(t.maxPlayers);
+          const reg = Array.isArray(t.registeredPlayers) ? t.registeredPlayers.length : 0;
+          return reg < max;
+        }).slice(0, 3);
 
-    console.log('🎯 Sit-n-Go route hit — returning 3 waiting tables');
-    console.log('🧪 Waiting Sit-n-Go tournaments:', waiting.map(t => ({
-      id: t.id,
-      name: t.name,
-      registered: Array.isArray(t.registeredPlayers) ? t.registeredPlayers.length : 0,
-      max: getMaxPlayers(t.maxPlayers)
-    })));
-
-    const enriched = waiting.map(t => {
+    const enriched = filtered.map(t => {
       const rake = t.rakePercent ?? 0.10;
       const netEntry = t.entryFee * (1 - rake);
       const prizeAmount = netEntry * getMaxPlayers(t.maxPlayers);
@@ -45,6 +40,7 @@ router.get('/', async (req, res) => {
         registeredPlayers: Array.isArray(t.registeredPlayers) ? t.registeredPlayers : [],
         prizeType: t.prizeType,
         prizeAmount,
+        rakeAmount: t.entryFee * rake,
         game: t.game,
         goalieMode: t.goalieMode,
         elimination: t.elimination,
@@ -53,10 +49,48 @@ router.get('/', async (req, res) => {
       };
     });
 
-    console.log('🧪 Final enriched payload:', enriched);
     res.status(200).json(enriched);
   } catch (err) {
     console.error('❌ Sit-n-Go fetch error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/sit-n-go/:id
+router.get('/:id', async (req, res) => {
+  try {
+    const tournament = await Tournament.findOne({ id: req.params.id });
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+    res.status(200).json(tournament);
+  } catch (err) {
+    console.error(`❌ Failed to fetch Sit‑n‑Go ${req.params.id}:`, err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/sit-n-go/register/:id
+router.post('/register/:id', async (req, res) => {
+  const { playerId } = req.body;
+  const { id } = req.params;
+
+  if (!playerId || playerId.startsWith('guest')) {
+    return res.status(403).json({ error: 'Guests cannot register' });
+  }
+
+  try {
+    const tournament = await Tournament.findOne({ id });
+    if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+
+    if (tournament.registeredPlayers.includes(playerId)) {
+      return res.status(400).json({ error: 'Already registered' });
+    }
+
+    tournament.registeredPlayers.push(playerId);
+    await tournament.save();
+
+    res.status(200).json({ message: 'Registered', tournament });
+  } catch (err) {
+    console.error(`❌ Registration error for ${id}:`, err.message);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -82,6 +116,7 @@ router.post('/clone/:id', async (req, res) => {
       core: original.core || 'genesis_plus_gx',
       registeredPlayers: [],
       status: 'scheduled',
+      startTime: null,
       game: original.game,
       rakePercent: original.rakePercent ?? 0.10
     });
@@ -100,7 +135,8 @@ router.post('/recalculate-prizes', async (req, res) => {
   try {
     const tournaments = await Tournament.find({
       type: 'sit-n-go',
-      status: 'scheduled'
+      status: 'scheduled',
+      startTime: null
     });
 
     let updatedCount = 0;
@@ -144,6 +180,7 @@ router.post('/create-test', async (req, res) => {
       core: 'genesis_plus_gx',
       registeredPlayers: [],
       status: 'scheduled',
+      startTime: null,
       game: 'NHL 95',
       rakePercent: 0.10
     });
