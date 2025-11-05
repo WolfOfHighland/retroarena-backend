@@ -9,10 +9,20 @@ module.exports = function(io) {
   // GET /api/tournaments (Scheduled only)
   router.get('/', async (_req, res) => {
     try {
+      // 🔓 Loosened query to restore visibility
       const tournaments = await Tournament.find({
-        type: 'scheduled',
-        startTime: { $ne: null }
+        $or: [
+          { type: 'scheduled' },
+          { startTime: { $ne: null } }
+        ]
       });
+
+      // 🧪 Debug log to confirm DB contents
+      console.log('🧪 Raw tournaments from DB:', tournaments.map(t => ({
+        id: t.id,
+        type: t.type,
+        startTime: t.startTime
+      })));
 
       const enriched = tournaments.map(t => {
         const entryFee = t.entryFee ?? 0;
