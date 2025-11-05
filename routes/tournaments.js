@@ -56,7 +56,7 @@ module.exports = function(io) {
 
         return {
           ...t.toObject(),
-	  entry fee,
+	  entryFee,
           rakePercent,
           rakeAmount,
           prizeAmount,
