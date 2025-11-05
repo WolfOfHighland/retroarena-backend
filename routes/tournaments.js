@@ -29,12 +29,13 @@ module.exports = function(io) {
         const rakePercent = entryFee <= 10 ? 0.10 : entryFee <= 20 ? 0.08 : 0.05;
         const rakeAmount = Math.round(entryFee * rakePercent * 100) / 100;
         const netEntry = entryFee - rakeAmount;
-        const maxPlayers = typeof t.maxPlayers === 'number' ? t.maxPlayers : Number(t.maxPlayers) || 4;
+        const maxPlayers = typeof t.maxPlayers === 'number' && !isNaN(t.maxPlayers)
+          ? t.maxPlayers
+          : undefined;
         const registeredCount = Array.isArray(t.registeredPlayers) ? t.registeredPlayers.length : 0;
         const prizeAmount = t.prizeType === 'guaranteed'
-          ? t.prizeAmount ?? netEntry * maxPlayers
-          : netEntry * registeredCount;
-
+         ? t.prizeAmount ?? (maxPlayers ? netEntry * maxPlayers : 0)
+         : netEntry * registeredCount;
         return {
           id: t.id || t._id.toString(),
           name: t.name,
