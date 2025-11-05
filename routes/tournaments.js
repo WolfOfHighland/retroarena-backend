@@ -18,60 +18,34 @@ module.exports = function(io) {
         const entryFee = t.entryFee ?? 0;
         const rakePercent = entryFee <= 10 ? 0.10 : entryFee <= 20 ? 0.08 : 0.05;
         const rakeAmount = Math.round(entryFee * rakePercent * 100) / 100;
-        const prizeAmount = entryFee - rakeAmount;
+        const netEntry = entryFee - rakeAmount;
+        const maxPlayers = typeof t.maxPlayers === 'number' ? t.maxPlayers : Number(t.maxPlayers) || 4;
+        const registeredCount = Array.isArray(t.registeredPlayers) ? t.registeredPlayers.length : 0;
+        const prizeAmount = t.prizeType === 'guaranteed'
+          ? t.prizeAmount ?? netEntry * maxPlayers
+          : netEntry * registeredCount;
 
         return {
-          ...t.toObject(),
-	  entryFee, 
+          id: t.id || t._id.toString(),
+          name: t.name,
+          entryFee,
+          registeredPlayers: Array.isArray(t.registeredPlayers) ? t.registeredPlayers : [],
+          maxPlayers,
+          prizeType: t.prizeType ?? 'dynamic',
+          prizeAmount,
           rakePercent,
           rakeAmount,
-          prizeAmount,
-          prizeType: t.prizeType ?? 'dynamic',
-          prizeAmount: t.prizeType === 'guaranteed'
-            ? t.prizeAmount ?? prizeAmount
-            : prizeAmount
+          game: t.game,
+          goalieMode: t.goalieMode,
+          elimination: t.elimination,
+          status: t.status || 'scheduled',
+          startTime: t.startTime
         };
       });
 
       res.status(200).json(enriched);
     } catch (err) {
       console.error('❌ Failed to fetch tournaments:', err.message);
-      res.status(500).json({ error: 'Server error' });
-    }
-  });
-
-  // ✅ GET /api/sit-n-go (Sit‑n‑Go templates)
-  router.get('/sit-n-go', async (_req, res) => {
-    try {
-      const tournaments = await Tournament.find({
-        type: 'sit-n-go',
-        status: 'scheduled',
-        startTime: { $in: [null, undefined] }
-      });
-
-      const enriched = tournaments.map(t => {
-        const entryFee = t.entryFee ?? 0;
-        const rakePercent = entryFee <= 10 ? 0.10 : entryFee <= 20 ? 0.08 : 0.05;
-        const rakeAmount = Math.round(entryFee * rakePercent * 100) / 100;
-        const prizeAmount = entryFee - rakeAmount;
-
-        return {
-          ...t.toObject(),
-	  entryFee,
-          rakePercent,
-          rakeAmount,
-          prizeAmount,
-          prizeType: t.prizeType ?? 'dynamic',
-          prizeAmount: t.prizeType === 'guaranteed'
-            ? t.prizeAmount ?? prizeAmount
-            : prizeAmount
-        };
-      });
-
-      console.log(`🧪 Sit‑n‑Go query returned ${enriched.length} tournament(s)`);
-      res.status(200).json(enriched);
-    } catch (err) {
-      console.error('❌ Failed to fetch Sit‑n‑Go tournaments:', err.message);
       res.status(500).json({ error: 'Server error' });
     }
   });
