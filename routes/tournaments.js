@@ -6,11 +6,12 @@ const { saveMatchState, loadMatchStatesByTournament } = require('../utils/matchS
 module.exports = function(io) {
   const router = express.Router();
 
-  // GET /api/tournaments
+  // GET /api/tournaments (Scheduled only)
   router.get('/', async (_req, res) => {
     try {
       const tournaments = await Tournament.find({
-        startTime: { $ne: null } // filters out Sit-n-Go templates
+        type: 'scheduled',
+        startTime: { $ne: null }
       });
 
       const enriched = tournaments.map(t => {
@@ -21,7 +22,6 @@ module.exports = function(io) {
 
         return {
           ...t.toObject(),
-          type: 'scheduled',
           rakePercent,
           rakeAmount,
           prizeAmount,
@@ -35,6 +35,41 @@ module.exports = function(io) {
       res.status(200).json(enriched);
     } catch (err) {
       console.error('❌ Failed to fetch tournaments:', err.message);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+
+  // ✅ GET /api/sit-n-go (Sit‑n‑Go templates)
+  router.get('/sit-n-go', async (_req, res) => {
+    try {
+      const tournaments = await Tournament.find({
+        type: 'sit-n-go',
+        status: 'scheduled',
+        startTime: { $in: [null, undefined] }
+      });
+
+      const enriched = tournaments.map(t => {
+        const entryFee = t.entryFee ?? 0;
+        const rakePercent = entryFee <= 10 ? 0.10 : entryFee <= 20 ? 0.08 : 0.05;
+        const rakeAmount = Math.round(entryFee * rakePercent * 100) / 100;
+        const prizeAmount = entryFee - rakeAmount;
+
+        return {
+          ...t.toObject(),
+          rakePercent,
+          rakeAmount,
+          prizeAmount,
+          prizeType: t.prizeType ?? 'dynamic',
+          prizeAmount: t.prizeType === 'guaranteed'
+            ? t.prizeAmount ?? prizeAmount
+            : prizeAmount
+        };
+      });
+
+      console.log(`🧪 Sit‑n‑Go query returned ${enriched.length} tournament(s)`);
+      res.status(200).json(enriched);
+    } catch (err) {
+      console.error('❌ Failed to fetch Sit‑n‑Go tournaments:', err.message);
       res.status(500).json({ error: 'Server error' });
     }
   });
