@@ -4,7 +4,12 @@ const Tournament = require("../models/Tournament");
 
 async function seedOpeningDay() {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
+    if (mongoose.connection.readyState === 0) {
+      await mongoose.connect(process.env.MONGO_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+      });
+    }
 
     // ✅ Push start times 1 hour into the future
     const baseDate = new Date(Date.now() + 60 * 60 * 1000);
@@ -31,9 +36,6 @@ async function seedOpeningDay() {
         prizeAmount: 0,
       };
 
-      // ❌ Don't include maxPlayers at all if uncapped
-      // If you ever want to cap it, set tournament.maxPlayers = X here
-
       tournaments.push(tournament);
     }
 
@@ -43,8 +45,16 @@ async function seedOpeningDay() {
   } catch (err) {
     console.error("❌ Seed failed:", err);
   } finally {
-    mongoose.disconnect();
+    if (require.main === module) {
+      mongoose.disconnect();
+    }
   }
 }
 
-seedOpeningDay();
+// ✅ Export for server.js
+module.exports = seedOpeningDay;
+
+// ✅ Run directly if invoked via CLI
+if (require.main === module) {
+  seedOpeningDay().then(() => process.exit(0));
+}
