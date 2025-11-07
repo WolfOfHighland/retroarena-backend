@@ -11,7 +11,24 @@ const {
 module.exports = function (io) {
   const router = express.Router();
 
-  router.post('/freeroll/register/:id', async (req, res) => {
+  // ✅ GET /freeroll — fetch scheduled freeroll tournaments
+  router.get('/', async (req, res) => {
+    try {
+      const tournaments = await Tournament.find({
+        entryFee: 0,
+        type: 'sit-n-go',
+        status: 'scheduled'
+      }).sort({ createdAt: -1 });
+
+      res.status(200).json(tournaments);
+    } catch (err) {
+      console.error('❌ Failed to fetch freerolls:', err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+
+  // ✅ POST /freeroll/register/:id — join a freeroll and spawn matches
+  router.post('/register/:id', async (req, res) => {
     try {
       const { id } = req.params;
       const { playerId, displayName = 'Guest' } = req.body;
@@ -23,23 +40,19 @@ module.exports = function (io) {
       const tournament = await Tournament.findOne({ id, entryFee: 0 });
       if (!tournament) return res.status(404).json({ error: 'Freeroll not found' });
 
-      // Normalize registeredPlayers
       tournament.registeredPlayers = Array.isArray(tournament.registeredPlayers)
         ? tournament.registeredPlayers.map(p => (typeof p === 'string' ? { id: p } : p))
         : [];
 
-      // Enforce maxPlayers
       if (tournament.registeredPlayers.length >= tournament.maxPlayers) {
         return res.status(403).json({ error: 'Tournament is full' });
       }
 
-      // Prevent duplicate joins
       const alreadyJoined = tournament.registeredPlayers.some(p => p.id === playerId);
       if (alreadyJoined) {
         return res.status(200).json({ message: 'Already joined' });
       }
 
-      // Push full player object
       tournament.registeredPlayers.push({
         id: playerId,
         displayName,
