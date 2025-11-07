@@ -9,7 +9,7 @@ const { createAdapter } = require('@socket.io/redis-adapter');
 const { createClient } = require('redis');
 const cors = require('cors');
 const webhookRoutes = require('./routes/webhooks');
-const freerollRoutes = require('./routes/freeroll')(io);
+
 
 
 
@@ -36,6 +36,7 @@ const io = new Server(server, {
 });
 module.exports.io = io;
 
+
 // Models
 const Player = require('./models/Player');
 const Tournament = require('./models/Tournament');
@@ -60,6 +61,7 @@ app.use('/api/sit-n-go', require('./routes/sit-n-go-join')(io));
 app.use('/api/tournaments', require('./routes/tournaments')(io));
 app.use('/api/tournaments', require('./routes/tournaments-join'));
 app.use('/api/cashier', require('./routes/cashier'));
+const freerollRoutes = require('./routes/freeroll')(io);
 app.use('/api/freeroll', freerollRoutes);
 app.use('/webhooks', webhookRoutes);
 console.log('✅ Webhook routes loaded');
