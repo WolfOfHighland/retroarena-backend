@@ -1,6 +1,5 @@
 require('dotenv').config();
 
-// debug log
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -8,10 +7,15 @@ const mongoose = require('mongoose');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const { createClient } = require('redis');
 const cors = require('cors');
+
 const webhookRoutes = require('./routes/webhooks');
+const freerollRoutes = require('./routes/freeroll');
+const seedOpeningDay = require('./scripts/seedOpeningDay');
+const { saveMatchState, loadMatchState, setRedis } = require('./utils/matchState');
 
-
-
+// Models
+const Player = require('./models/Player');
+const Tournament = require('./models/Tournament');
 
 // Express setup
 const app = express();
@@ -36,18 +40,6 @@ const io = new Server(server, {
 });
 module.exports.io = io;
 
-
-// Models
-const Player = require('./models/Player');
-const Tournament = require('./models/Tournament');
-
-// Scheduler
-const {
-  scheduleAllTournaments,
-  scheduleTournamentStart,
-  watchSitNGoTables,
-} = require('./scheduler/tournaments');
-
 // API logger
 app.use('/api', (req, _res, next) => {
   console.log(`➡️ API ${req.method} ${req.originalUrl}`);
@@ -61,8 +53,7 @@ app.use('/api/sit-n-go', require('./routes/sit-n-go-join')(io));
 app.use('/api/tournaments', require('./routes/tournaments')(io));
 app.use('/api/tournaments', require('./routes/tournaments-join'));
 app.use('/api/cashier', require('./routes/cashier'));
-const freerollRoutes = require('./routes/freeroll')(io);
-app.use('/api/freeroll', freerollRoutes);
+app.use('/api/freeroll', freerollRoutes(io));
 app.use('/webhooks', webhookRoutes);
 console.log('✅ Webhook routes loaded');
 
@@ -70,15 +61,12 @@ console.log('✅ Webhook routes loaded');
 app.get("/", (_req, res) => res.send("Retro Rumble Arena backend is live 🐺"));
 app.get("/api/ping", (_req, res) => res.send("pong"));
 app.get("/ping", (_req, res) => res.send("pong"));
+
+// MatchStates via Redis
 app.get('/api/matchstates', async (req, res) => {
   const { tournamentId } = req.query;
-  if (!tournamentId) {
-    return res.status(400).json({ error: 'Missing tournamentId' });
-  }
-
-  if (!redis) {
-    return res.status(500).json({ error: 'Redis not available' });
-  }
+  if (!tournamentId) return res.status(400).json({ error: 'Missing tournamentId' });
+  if (!redis) return res.status(500).json({ error: 'Redis not available' });
 
   try {
     const keys = await redis.keys('match:*');
@@ -95,7 +83,6 @@ app.get('/api/matchstates', async (req, res) => {
 
     const filtered = parsed.filter(m => m && m.tournamentId === tournamentId);
     console.log(`🧪 Filtered matchStates for ${tournamentId}:`, filtered);
-
     res.json(filtered);
   } catch (err) {
     console.error('❌ Failed to load matchstates:', err.message);
@@ -140,7 +127,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('testPing', (data) => {
+  socket.on('testPing', () => {
     socket.emit('testPong', { message: 'pong from backend' });
   });
 
@@ -162,8 +149,7 @@ if (process.env.REDIS_URL) {
   const pubClient = createClient({ url: process.env.REDIS_URL });
   const subClient = pubClient.duplicate();
   redis = pubClient;
-  
-  const { setRedis } = require('./utils/matchState');
+
   setRedis(redis);
 
   (async () => {
@@ -180,26 +166,21 @@ if (process.env.REDIS_URL) {
   console.log('⚠️ No REDIS_URL provided — skipping Redis adapter');
 }
 
-// 🧠 Daily tournament refresh logic
-const seedOpeningDay = require('./scripts/seedOpeningDay');
-
-// MongoDB setup
+// MongoDB setup ✅ PATCHED WITH dbName
 if (process.env.MONGO_URI) {
   mongoose.connect(process.env.MONGO_URI, {
+    dbName: 'retro_rumble', // ✅ critical fix
     useNewUrlParser: true,
     useUnifiedTopology: true,
   }).then(async () => {
     console.log('✅ Connected to MongoDB');
 
-    // 🧹 Remove expired empty tournaments
     await Tournament.deleteMany({
       startTime: { $lt: new Date() },
       registeredPlayers: []
     });
 
-    // 🔁 Seed today's brackets
     await seedOpeningDay();
-
     scheduleAllTournaments(io);
     watchSitNGoTables(io);
   }).catch((err) => {
@@ -208,10 +189,6 @@ if (process.env.MONGO_URI) {
 } else {
   console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
 }
-
-
-// Redis helpers 
-const { saveMatchState, loadMatchState } = require('./utils/matchState');
 
 // Custom routes
 app.post('/register-player', async (req, res) => {
@@ -286,45 +263,15 @@ app.post("/start-match", async (req, res) => {
     return res.status(200).json({
       ok: true,
       message: "Match start emitted",
-      matchState,
+            matchState,
     });
   } catch (err) {
-    console.error("❌ start-match error:", err.message);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("❌ Failed to start match:", err.message);
+    return res.status(500).json({ error: "Failed to start match" });
   }
 });
 
-app.get('/api/matchstates', async (req, res) => {
-  const { tournamentId } = req.query;
-  if (!tournamentId) {
-    return res.status(400).json({ error: 'Missing tournamentId' });
-  }
-
-  if (!redis) {
-    return res.status(500).json({ error: 'Redis not available' });
-  }
-
-  try {
-    const keys = await redis.keys(`match:*`);
-    const all = await Promise.all(keys.map(k => redis.get(k)));
-    const parsed = all
-      .map(json => {
-        try {
-          return JSON.parse(json);
-        } catch {
-          return null;
-        }
-      })
-      .filter(m => m && m.tournamentId === tournamentId);
-
-    res.json(parsed);
-  } catch (err) {
-    console.error('❌ Failed to load matchstates:', err.message);
-    res.status(500).json({ error: 'Failed to load matchstates' });
-  }
-});
-
-
+// Server boot
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`🚀 Server listening on port ${PORT}`);
