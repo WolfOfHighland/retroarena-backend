@@ -1,4 +1,5 @@
 const Tournament = require("../models/Tournament");
+const { loadMatchState } = require("../utils/matchState");
 
 function formatTimeEDT(date) {
   try {
@@ -36,7 +37,7 @@ async function emitTournamentSchedule(io) {
       const start = new Date(t.startTime).getTime();
       return {
         id: t._id,
-        tournamentId: t.id, // ✅ Add this for frontend matchStart payload
+        tournamentId: t.id,
         name: t.name,
         startTime: t.startTime,
         localTime: formatTimeEDT(t.startTime),
@@ -48,7 +49,7 @@ async function emitTournamentSchedule(io) {
         elimination: t.elimination,
         isLive: t.status === "live",
         hasStarted: start <= now,
-        romUrl: t.romUrl || "https://www.retrorumblearena.com/roms/NHL_95.bin", // ✅ fallback
+        romUrl: t.romUrl || "https://www.retrorumblearena.com/roms/NHL_95.bin",
       };
     });
 
@@ -78,6 +79,40 @@ async function emitTournamentSchedule(io) {
   }
 }
 
+function watchSitNGoTables(io) {
+  console.log("👀 watchSitNGoTables activated");
+
+  const pollInterval = 30000; // every 30 seconds
+
+  setInterval(async () => {
+    try {
+      const sitNGo = await Tournament.find({
+        type: "sit-n-go",
+        status: "live",
+      }).lean();
+
+      const updates = await Promise.all(
+        sitNGo.map(async (t) => {
+          const state = await loadMatchState(t.id);
+          return {
+            tournamentId: t.id,
+            name: t.name,
+            players: t.registeredPlayers || [],
+            matchState: state || null,
+          };
+        })
+      );
+
+      io.emit("sitNGoUpdate", updates);
+      console.log(`📡 Emitted ${updates.length} Sit-n-Go updates`);
+    } catch (err) {
+      console.error("⚠️ Sit-n-Go polling failed:", err.message);
+    }
+  }, pollInterval);
+}
+
 module.exports = {
   emitTournamentSchedule,
+  scheduleAllTournaments,
+  watchSitNGoTables,
 };
