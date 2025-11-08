@@ -4,7 +4,7 @@ const Tournament = require("../models/Tournament");
 const MatchState = require("../models/MatchState");
 const { generateBracket, createMatchState } = require("../utils/bracketManager");
 
-const BRACKET_SIZE = 8; // Can be 8, 16, etc.
+const BRACKET_SIZE = 8;
 
 module.exports = function (io) {
   router.post("/join/:id", async (req, res) => {
@@ -26,11 +26,14 @@ module.exports = function (io) {
 
       console.log(`✅ Player ${playerId} registered for ${tournament.name}`);
 
-      // 🧠 Group players into brackets of BRACKET_SIZE
       const unprocessed = [...tournament.registeredPlayers];
       const matched = new Set();
       let bracketCount = 0;
       const round = 1;
+
+      const romPath = tournament.rom?.startsWith("http")
+        ? tournament.rom
+        : `https://www.retrorumblearena.com/Retroarch-Browser/roms/${tournament.rom || "NHL_95.bin"}`;
 
       while (unprocessed.length >= BRACKET_SIZE) {
         const bracketPlayers = unprocessed.splice(0, BRACKET_SIZE);
@@ -43,14 +46,18 @@ module.exports = function (io) {
         for (let index = 0; index < matches.length; index++) {
           const pair = matches[index];
           const matchId = `${tournament.id}-bracket${bracketCount}-r${round}-m${index}`;
-          const matchState = createMatchState(matchId, pair, {
-            rom: tournament.rom,
-            core: tournament.core,
-            goalieMode: tournament.goalieMode,
-            periodLength: tournament.periodLength,
+
+          const matchState = {
+            matchId,
+            tournamentId: tournament.id,
+            players: pair,
             round,
             matchIndex: index,
-          });
+            rom: romPath,
+            core: tournament.core || "genesis_plus_gx",
+            goalieMode: tournament.goalieMode,
+            periodLength: tournament.periodLength,
+          };
 
           const matchDoc = new MatchState(matchState);
           await matchDoc.save();
@@ -58,6 +65,7 @@ module.exports = function (io) {
 
           for (const player of pair) {
             io.to(player).emit("matchStart", matchState);
+            console.log(`🎮 matchStart emitted to ${player}`);
             matched.add(player);
           }
         }

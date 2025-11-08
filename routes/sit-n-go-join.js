@@ -1,7 +1,7 @@
 const express = require('express');
 const Tournament = require('../models/Tournament');
 const MatchState = require('../models/MatchState');
-const User = require('../models/User'); // Assuming you have a User model
+const User = require('../models/User');
 const {
   generateBracket,
   createMatchState,
@@ -31,30 +31,25 @@ module.exports = function (io) {
         return res.status(403).json({ error: 'Insufficient wallet balance' });
       }
 
-      // 🧼 Normalize legacy entries
       tournament.registeredPlayers = Array.isArray(tournament.registeredPlayers)
         ? tournament.registeredPlayers.map(p => (typeof p === 'string' ? { id: p } : p))
         : [];
 
-      // 🚫 Enforce maxPlayers
       if (tournament.registeredPlayers.length >= tournament.maxPlayers) {
         console.log(`🚫 Tournament ${tournament.id} is full`);
         return res.status(403).json({ error: 'Tournament is full' });
       }
 
-      // ✅ Check for existing player
       const alreadyJoined = tournament.registeredPlayers.some(p => p.id === playerId);
       if (alreadyJoined) {
         console.log(`⚠️ Player ${playerId} already joined ${tournament.name}`);
         return res.status(200).json({ message: 'Already joined' });
       }
 
-      // 💸 Deduct wallet before saving
       user.wallet -= tournament.entryFee;
       await user.save();
       console.log(`💸 Deducted $${tournament.entryFee} from ${playerId}`);
 
-      // ✅ Push and persist full player object
       tournament.registeredPlayers.push({
         id: playerId,
         displayName,
@@ -65,52 +60,47 @@ module.exports = function (io) {
       await tournament.save();
       console.log(`✅ Saved ${playerId} to tournament ${tournament.id}`);
 
-      // 🔥 Emit matches if full
       if (tournament.registeredPlayers.length === tournament.maxPlayers) {
         const round = 1;
         const bracket = generateBracket(tournament.registeredPlayers.map(p => p.id));
 
+        const romPath = tournament.rom?.startsWith("http")
+          ? tournament.rom
+          : `https://www.retrorumblearena.com/Retroarch-Browser/roms/${tournament.rom || "NHL_95.bin"}`;
+
         for (let index = 0; index < bracket.length; index++) {
           const pair = bracket[index];
           const matchId = `${tournament.id}-r${round}-m${index}`;
-          const matchState = createMatchState(matchId, pair, {
-            rom: tournament.rom,
-            core: tournament.core,
-            goalieMode: tournament.goalieMode,
-            periodLength: tournament.periodLength,
-            round,
-            matchIndex: index,
-          });
 
-          const matchDoc = new MatchState({
+          const matchState = {
             matchId,
             tournamentId: tournament.id,
             players: pair,
             round,
             matchIndex: index,
-            rom: tournament.rom,
-            core: tournament.core,
+            rom: romPath,
+            core: tournament.core || "genesis_plus_gx",
             goalieMode: tournament.goalieMode,
             periodLength: tournament.periodLength
-          });
+          };
 
+          const matchDoc = new MatchState(matchState);
           console.log(`🧪 Saving matchDoc:`, matchDoc);
           await matchDoc.save();
           console.log(`💾 Saved matchState for ${matchId}`);
 
           pair.forEach(player => {
             io.to(player).emit('matchStart', matchState);
+            console.log(`🎮 matchStart emitted to ${player}`);
           });
         }
 
-        // 💰 Calculate prize pool with rake
         const rakePercent = tournament.rakePercent ?? 0.10;
         const netEntry = tournament.entryFee * (1 - rakePercent);
         tournament.prizeAmount = netEntry * tournament.maxPlayers;
         await tournament.save();
         console.log(`💰 Prize pool updated to $${tournament.prizeAmount}`);
 
-        // 🧬 Auto-clone tournament
         const newTournament = new Tournament({
           id: `${tournament.id}-clone-${Date.now()}`,
           name: tournament.name,
