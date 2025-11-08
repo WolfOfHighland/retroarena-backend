@@ -1,23 +1,24 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const Tournament = require('../models/Tournament');
-const { generateBracket, createMatchState } = require('../utils/bracketManager');
+const Tournament = require("../models/Tournament");
+const MatchState = require("../models/MatchState");
+const { generateBracket, createMatchState } = require("../utils/bracketManager");
 
 const BRACKET_SIZE = 8; // Can be 8, 16, etc.
 
-module.exports = function(io) {
-  router.post('/join/:id', async (req, res) => {
+module.exports = function (io) {
+  router.post("/join/:id", async (req, res) => {
     try {
       const tournament = await Tournament.findOne({ id: req.params.id });
-      if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+      if (!tournament) return res.status(404).json({ error: "Tournament not found" });
 
       const { playerId } = req.body;
-      if (!playerId) return res.status(400).json({ error: 'Missing playerId' });
+      if (!playerId) return res.status(400).json({ error: "Missing playerId" });
 
       const alreadyJoined = tournament.registeredPlayers?.includes(playerId);
       if (alreadyJoined) {
         console.log(`⚠️ Player ${playerId} already registered for ${tournament.name}`);
-        return res.status(200).json({ message: 'Already registered' });
+        return res.status(200).json({ message: "Already registered" });
       }
 
       tournament.registeredPlayers.push(playerId);
@@ -49,21 +50,26 @@ module.exports = function(io) {
             matchIndex: index,
           });
 
-          console.log(`🎮 Emitting matchStart for ${matchId}`);
-          pair.forEach(player => {
-            io.to(player).emit('matchStart', matchState);
+          // 💾 Optional: persist match state
+          const matchDoc = new MatchState(matchState);
+          await matchDoc.save();
+          console.log(`💾 Saved matchState for ${matchId}`);
+
+          // 🎮 Emit matchStart to each player's room
+          pair.forEach((player) => {
+            io.to(player).emit("matchStart", matchState);
             matched.add(player);
           });
         });
       }
 
-      const remaining = tournament.registeredPlayers.filter(p => !matched.has(p));
+      const remaining = tournament.registeredPlayers.filter((p) => !matched.has(p));
       console.log(`⏳ Waiting pool: ${remaining.length} players`);
 
-      res.status(200).json({ message: 'Registered successfully' });
+      res.status(200).json({ message: "Registered successfully" });
     } catch (err) {
-      console.error('❌ Tournament register error:', err.message);
-      res.status(500).json({ error: 'Server error' });
+      console.error("❌ Tournament register error:", err.message);
+      res.status(500).json({ error: "Server error" });
     }
   });
 
