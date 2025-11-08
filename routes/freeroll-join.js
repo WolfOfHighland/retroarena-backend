@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Tournament = require("../models/Tournament");
-const io = require("../socket"); // adjust if your socket instance is exported differently
+const io = require("../socket"); // adjust if needed
 
 function buildMatchPayload(tournament) {
   return {
@@ -36,11 +36,13 @@ router.post("/freeroll/register/:id", async (req, res) => {
     tournament.registeredPlayers.push(playerId);
     await tournament.save();
 
-    // ✅ Emit matchStart if 2 players are now registered
+    // ✅ Emit matchStart to each player's room if 2 players are now registered
     if (tournament.registeredPlayers.length === 2) {
       const payload = buildMatchPayload(tournament);
-      io.emit("matchStart", payload);
-      console.log(`🎮 matchStart emitted for ${id}`);
+      tournament.registeredPlayers.forEach((playerId) => {
+        io.to(playerId).emit("matchStart", payload);
+        console.log(`🎮 matchStart emitted to ${playerId}`);
+      });
     }
 
     res.status(200).json({ message: "Joined freeroll", tournament });
