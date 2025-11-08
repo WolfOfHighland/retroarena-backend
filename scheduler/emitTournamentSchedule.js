@@ -111,6 +111,11 @@ function watchSitNGoTables(io) {
   }, pollInterval);
 }
 
+function scheduleAllTournaments(io) {
+  console.log("⏰ scheduleAllTournaments placeholder triggered");
+  // Future logic for timed matchStart emits can go here
+}
+
 module.exports = {
   emitTournamentSchedule,
   scheduleAllTournaments,
