@@ -39,7 +39,9 @@ module.exports = function (io) {
         console.log(`🎯 Creating bracket ${bracketCount} with players:`, bracketPlayers);
 
         const matches = generateBracket(bracketPlayers);
-        matches.forEach((pair, index) => {
+
+        for (let index = 0; index < matches.length; index++) {
+          const pair = matches[index];
           const matchId = `${tournament.id}-bracket${bracketCount}-r${round}-m${index}`;
           const matchState = createMatchState(matchId, pair, {
             rom: tournament.rom,
@@ -50,17 +52,15 @@ module.exports = function (io) {
             matchIndex: index,
           });
 
-          // 💾 Optional: persist match state
           const matchDoc = new MatchState(matchState);
           await matchDoc.save();
           console.log(`💾 Saved matchState for ${matchId}`);
 
-          // 🎮 Emit matchStart to each player's room
-          pair.forEach((player) => {
+          for (const player of pair) {
             io.to(player).emit("matchStart", matchState);
             matched.add(player);
-          });
-        });
+          }
+        }
       }
 
       const remaining = tournament.registeredPlayers.filter((p) => !matched.has(p));
