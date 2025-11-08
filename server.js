@@ -12,6 +12,8 @@ const webhookRoutes = require('./routes/webhooks');
 const freerollRoutes = require('./routes/freeroll');
 const seedOpeningDay = require('./scripts/seedOpeningDay');
 const { saveMatchState, loadMatchState, setRedis } = require('./utils/matchState');
+const { scheduleAllTournaments, watchSitNGoTables } = require('./scheduler/emitTournamentSchedule');
+
 
 // Models
 const Player = require('./models/Player');
@@ -181,7 +183,7 @@ if (process.env.MONGO_URI) {
     });
 
     await seedOpeningDay();
-    scheduleAllTournaments(io);
+    emitTournamentSchedule(io);
     watchSitNGoTables(io);
   }).catch((err) => {
     console.error('⚠️ MongoDB connection failed:', err.message);
