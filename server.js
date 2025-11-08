@@ -8,14 +8,13 @@ const { createAdapter } = require('@socket.io/redis-adapter');
 const { createClient } = require('redis');
 const cors = require('cors');
 
+// Routes and utilities
 const webhookRoutes = require('./routes/webhooks');
 const freerollRoutes = require('./routes/freeroll');
 const seedOpeningDay = require('./scripts/seedOpeningDay');
 const { saveMatchState, loadMatchState, setRedis } = require('./utils/matchState');
-const { scheduleAllTournaments, watchSitNGoTables } = require('./scheduler/emitTournamentSchedule');
+const { emitTournamentSchedule, scheduleAllTournaments, watchSitNGoTables } = require('./scheduler/emitTournamentSchedule'); // ✅ FIXED import
 
-
-// Models
 const Player = require('./models/Player');
 const Tournament = require('./models/Tournament');
 
@@ -168,10 +167,10 @@ if (process.env.REDIS_URL) {
   console.log('⚠️ No REDIS_URL provided — skipping Redis adapter');
 }
 
-// MongoDB setup ✅ PATCHED WITH dbName
+// MongoDB setup ✅ PATCHED WITH emitTournamentSchedule
 if (process.env.MONGO_URI) {
   mongoose.connect(process.env.MONGO_URI, {
-    dbName: 'retro_rumble', // ✅ critical fix
+    dbName: 'retro_rumble',
     useNewUrlParser: true,
     useUnifiedTopology: true,
   }).then(async () => {
@@ -183,7 +182,7 @@ if (process.env.MONGO_URI) {
     });
 
     await seedOpeningDay();
-    emitTournamentSchedule(io);
+    emitTournamentSchedule(io); // ✅ Now defined and imported
     watchSitNGoTables(io);
   }).catch((err) => {
     console.error('⚠️ MongoDB connection failed:', err.message);
@@ -260,12 +259,12 @@ app.post("/start-match", async (req, res) => {
     };
 
     await saveMatchState(tournamentId, matchState);
-    io.to(tournamentId).emit("matchStart", matchState);
+    io.to(tournamentId).emit("matchStart", matchState); // ✅ Emits matchStart to tournament room
 
     return res.status(200).json({
       ok: true,
       message: "Match start emitted",
-            matchState,
+      matchState,
     });
   } catch (err) {
     console.error("❌ Failed to start match:", err.message);
@@ -275,6 +274,14 @@ app.post("/start-match", async (req, res) => {
 
 // Server boot
 const PORT = process.env.PORT || 10000;
+
 server.listen(PORT, () => {
   console.log(`🚀 Server listening on port ${PORT}`);
+  console.log(`==> Your service is live 🎉`);
+  console.log(`==>`);
+  console.log(`==> ///////////////////////////////////////////////////////////`);
+  console.log(`==>`);
+  console.log(`==> Available at your primary URL https://retroarena-backend.onrender.com`);
+  console.log(`==>`);
+  console.log(`==> ///////////////////////////////////////////////////////////`);
 });

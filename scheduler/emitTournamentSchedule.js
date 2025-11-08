@@ -17,7 +17,7 @@ function formatTimeEDT(date) {
 }
 
 async function emitTournamentSchedule(io) {
-  console.log(`📡 emitTournamentSchedule triggered`);
+  console.log("📡 emitTournamentSchedule triggered");
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
@@ -36,6 +36,7 @@ async function emitTournamentSchedule(io) {
       const start = new Date(t.startTime).getTime();
       return {
         id: t._id,
+        tournamentId: t.id, // ✅ Add this for frontend matchStart payload
         name: t.name,
         startTime: t.startTime,
         localTime: formatTimeEDT(t.startTime),
@@ -47,12 +48,14 @@ async function emitTournamentSchedule(io) {
         elimination: t.elimination,
         isLive: t.status === "live",
         hasStarted: start <= now,
+        romUrl: t.romUrl || "https://www.retrorumblearena.com/roms/NHL_95.bin", // ✅ fallback
       };
     });
 
     if (visible.length === 0) {
       visible.push({
         id: "dummy",
+        tournamentId: "freeroll-placeholder",
         name: "No tournaments today",
         startTime: null,
         localTime: "—",
@@ -64,6 +67,7 @@ async function emitTournamentSchedule(io) {
         elimination: "Single Elim",
         isLive: false,
         hasStarted: false,
+        romUrl: null,
       });
     }
 
@@ -74,4 +78,6 @@ async function emitTournamentSchedule(io) {
   }
 }
 
-module.exports = emitTournamentSchedule;
+module.exports = {
+  emitTournamentSchedule,
+};
