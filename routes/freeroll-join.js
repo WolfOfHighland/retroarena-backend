@@ -9,7 +9,7 @@ function buildMatchPayload(tournament) {
   return {
     matchId: tournament.id,
     tournamentId: tournament.id,
-    rom: bootUrl, // ✅ now a full boot URL
+    rom: bootUrl,
     core: tournament.core || "genesis_plus_gx",
     players: tournament.registeredPlayers.map((p) =>
       typeof p === "string" ? { id: p, name: p } : { id: p.id, name: p.displayName || p.id }
@@ -17,7 +17,7 @@ function buildMatchPayload(tournament) {
   };
 }
 
-// POST /api/freeroll/register/:id
+// ✅ Freeroll registration
 router.post("/freeroll/register/:id", async (req, res) => {
   const { playerId } = req.body;
   const { id } = req.params;
@@ -40,8 +40,8 @@ router.post("/freeroll/register/:id", async (req, res) => {
     tournament.registeredPlayers.push({ id: playerId, displayName: playerId });
     await tournament.save();
 
-    // ✅ Emit matchStart to each player's room if 2 players are now registered
-    if (tournament.registeredPlayers.length === 2) {
+    // ✅ Emit matchStart if 2 or more players are registered
+    if (tournament.registeredPlayers.length >= 2) {
       const payload = buildMatchPayload(tournament);
       tournament.registeredPlayers.forEach((p) => {
         const room = typeof p === "string" ? p : p.id;
@@ -53,6 +53,31 @@ router.post("/freeroll/register/:id", async (req, res) => {
     res.status(200).json({ message: "Joined freeroll", tournament });
   } catch (err) {
     console.error(`❌ Freeroll join error for ${id}:`, err.message);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ✅ Step 2: Manual matchStart emit for stuck tournaments
+router.post("/dev/emit-match", async (req, res) => {
+  const { tournamentId } = req.body;
+  try {
+    const tournament = await Tournament.findOne({ id: tournamentId, entryFee: 0 });
+    if (!tournament) return res.status(404).json({ error: "Tournament not found" });
+
+    if (!Array.isArray(tournament.registeredPlayers) || tournament.registeredPlayers.length < 2) {
+      return res.status(400).json({ error: "Tournament not full" });
+    }
+
+    const payload = buildMatchPayload(tournament);
+    tournament.registeredPlayers.forEach((p) => {
+      const room = typeof p === "string" ? p : p.id;
+      io.to(room).emit("matchStart", payload);
+      console.log(`🎮 matchStart manually emitted to ${room}`);
+    });
+
+    res.status(200).json({ message: "matchStart emitted", tournamentId });
+  } catch (err) {
+    console.error(`❌ Manual emit error for ${tournamentId}:`, err.message);
     res.status(500).json({ error: "Server error" });
   }
 });
