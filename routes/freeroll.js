@@ -135,5 +135,45 @@ module.exports = function (io) {
     }
   });
 
+  // ✅ POST /emit-match — manually emit matchStart for a full freeroll
+  router.post('/emit-match', async (req, res) => {
+    const { tournamentId } = req.body;
+
+    try {
+      const tournament = await Tournament.findOne({ id: tournamentId, entryFee: 0 });
+      if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+
+      if (!Array.isArray(tournament.registeredPlayers) || tournament.registeredPlayers.length < 2) {
+        return res.status(400).json({ error: 'Tournament not full' });
+      }
+
+      const round = 1;
+      const bracket = generateBracket(tournament.registeredPlayers.map(p => p.id));
+
+      for (let index = 0; index < bracket.length; index++) {
+        const pair = bracket[index];
+        const matchId = `${tournament.id}-r${round}-m${index}`;
+        const matchState = createMatchState(matchId, pair, {
+          rom: tournament.rom,
+          core: tournament.core,
+          goalieMode: tournament.goalieMode,
+          periodLength: tournament.periodLength,
+          round,
+          matchIndex: index,
+        });
+
+        pair.forEach(player => {
+          io.to(player).emit('matchStart', matchState);
+          console.log(`🎮 matchStart manually emitted to ${player}`);
+        });
+      }
+
+      res.status(200).json({ message: 'matchStart emitted', tournamentId });
+    } catch (err) {
+      console.error(`❌ Manual emit error for ${tournamentId}:`, err.message);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+
   return router;
 };

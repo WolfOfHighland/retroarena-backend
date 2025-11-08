@@ -55,6 +55,7 @@ app.use('/api/tournaments', require('./routes/tournaments')(io));
 app.use('/api/tournaments', require('./routes/tournaments-join'));
 app.use('/api/cashier', require('./routes/cashier'));
 app.use('/api/freeroll', freerollRoutes(io));
+app.use("/api/dev", freerollRoutes(io)); // ✅ exposes /api/dev/emit-match
 app.use('/webhooks', webhookRoutes);
 console.log('✅ Webhook routes loaded');
 
@@ -271,6 +272,13 @@ app.post("/start-match", async (req, res) => {
     return res.status(500).json({ error: "Failed to start match" });
   }
 });
+app._router.stack
+  .filter(r => r.route)
+  .forEach(r => {
+    const method = Object.keys(r.route.methods)[0].toUpperCase();
+    const path = r.route.path;
+    console.log(`🔍 Mounted route: ${method} ${path}`);
+  });
 
 // Server boot
 const PORT = process.env.PORT || 10000;
