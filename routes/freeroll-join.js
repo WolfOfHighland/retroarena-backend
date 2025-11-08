@@ -7,7 +7,7 @@ function buildMatchPayload(tournament) {
   return {
     matchId: tournament.id,
     tournamentId: tournament.id,
-    rom: tournament.romUrl || "https://www.retrorumblearena.com/roms/NHL_95.bin",
+    rom: tournament.romUrl || "https://www.retrorumblearena.com/Retroarch-Browser/roms/NHL_95.bin",
     core: "genesis_plus_gx",
     players: tournament.registeredPlayers.map((id) => ({
       id,
