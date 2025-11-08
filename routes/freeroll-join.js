@@ -4,14 +4,12 @@ const Tournament = require("../models/Tournament");
 const io = require("../socket"); // adjust if needed
 
 function buildMatchPayload(tournament) {
-  const romPath = tournament.romUrl?.startsWith("http")
-    ? tournament.romUrl
-    : `https://www.retrorumblearena.com/Retroarch-Browser/roms/${tournament.rom || "NHL_95.bin"}`;
+  const bootUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${tournament.core || "genesis_plus_gx"}&rom=${tournament.rom || "NHL_95.bin"}`;
 
   return {
     matchId: tournament.id,
     tournamentId: tournament.id,
-    rom: romPath,
+    rom: bootUrl, // ✅ now a full boot URL
     core: tournament.core || "genesis_plus_gx",
     players: tournament.registeredPlayers.map((p) =>
       typeof p === "string" ? { id: p, name: p } : { id: p.id, name: p.displayName || p.id }

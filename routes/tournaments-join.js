@@ -31,9 +31,7 @@ module.exports = function (io) {
       let bracketCount = 0;
       const round = 1;
 
-      const romPath = tournament.rom?.startsWith("http")
-        ? tournament.rom
-        : `https://www.retrorumblearena.com/Retroarch-Browser/roms/${tournament.rom || "NHL_95.bin"}`;
+      const bootUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${tournament.core || "genesis_plus_gx"}&rom=${tournament.rom || "NHL_95.bin"}`;
 
       while (unprocessed.length >= BRACKET_SIZE) {
         const bracketPlayers = unprocessed.splice(0, BRACKET_SIZE);
@@ -53,7 +51,7 @@ module.exports = function (io) {
             players: pair,
             round,
             matchIndex: index,
-            rom: romPath,
+            rom: bootUrl,
             core: tournament.core || "genesis_plus_gx",
             goalieMode: tournament.goalieMode,
             periodLength: tournament.periodLength,
