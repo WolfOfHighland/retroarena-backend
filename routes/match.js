@@ -35,23 +35,28 @@ router.post('/start-match', async (req, res) => {
     const emittedMatches = [];
 
     matchPairs.forEach((pair, index) => {
-  const matchId = `${tournamentId}-r1-${index}`;
-  const matchState = createMatchState(matchId, pair, {
-    rom,
-    core,
-    goalieMode: tournament.goalieMode || "manual",
-    periodLength: tournament.periodLength || 5,
-  });
+      const matchId = `${tournamentId}-r1-${index}`;
+      const matchState = createMatchState(matchId, pair, {
+        rom,
+        core,
+        goalieMode: tournament.goalieMode || "manual",
+        periodLength: tournament.periodLength || 5,
+      });
 
-  // Emit to shared match room
-  io.to(matchId).emit("matchStart", matchState);
-  console.log(`🚀 Emitted matchStart to room ${matchId} for ${pair.join(" vs ")}`);
+      // Tell each player to join the match room
+      pair.forEach(playerId => {
+        io.to(playerId).emit("assignMatchRoom", { matchId });
+      });
 
-  emittedMatches.push({
-    matchId,
-    players: pair,
-  });
-});
+      // Emit to shared match room
+      io.to(matchId).emit("matchStart", matchState);
+      console.log(`🚀 Emitted matchStart to room ${matchId} for ${pair.join(" vs ")}`);
+
+      emittedMatches.push({
+        matchId,
+        players: pair,
+      });
+    });
 
     return res.status(200).json({
       ok: true,
