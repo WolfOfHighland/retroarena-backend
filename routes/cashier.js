@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const https = require('https');
-const Player = require('../models/Player');
+const User = require('../models/User');
 
 // ✅ POST /api/cashier/create-xsolla-token
 router.post('/create-xsolla-token', async (req, res) => {
@@ -69,28 +69,39 @@ router.post('/create-xsolla-token', async (req, res) => {
   }
 });
 
-// ✅ POST /api/cashier/deposit
+// ✅ POST /api/cashier/deposit (adds RRC)
 router.post('/deposit', async (req, res) => {
-  const { playerId, amount } = req.body;
-  const player = await Player.findOne({ username: playerId });
-  if (!player) return res.status(404).json({ error: 'Player not found' });
+  const { userId, amount } = req.body;
+  const user = await User.findOne({ username: userId });
+  if (!user) return res.status(404).json({ error: 'User not found' });
 
-  player.balance += amount;
-  await player.save();
-  res.status(200).json({ message: 'Deposit successful', balance: player.balance });
+  user.rrcBalance += amount;
+  await user.save();
+  res.status(200).json({ message: 'Deposit successful', rrcBalance: user.rrcBalance });
 });
 
-// ✅ POST /api/cashier/withdraw
+// ✅ POST /api/cashier/withdraw (subtracts RRC)
 router.post('/withdraw', async (req, res) => {
-  const { playerId, amount } = req.body;
-  const player = await Player.findOne({ username: playerId });
-  if (!player) return res.status(404).json({ error: 'Player not found' });
+  const { userId, amount } = req.body;
+  const user = await User.findOne({ username: userId });
+  if (!user) return res.status(404).json({ error: 'User not found' });
 
-  if (player.balance < amount) return res.status(400).json({ error: 'Insufficient funds' });
+  if (user.rrcBalance < amount) return res.status(400).json({ error: 'Insufficient funds' });
 
-  player.balance -= amount;
-  await player.save();
-  res.status(200).json({ message: 'Withdrawal successful', balance: player.balance });
+  user.rrcBalance -= amount;
+  await user.save();
+  res.status(200).json({ message: 'Withdrawal successful', rrcBalance: user.rrcBalance });
+});
+
+// ✅ POST /api/cashier/earn (adds RRP)
+router.post('/earn', async (req, res) => {
+  const { userId, amount } = req.body;
+  const user = await User.findOne({ username: userId });
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  user.rrpBalance += amount;
+  await user.save();
+  res.status(200).json({ message: 'RRP earned', rrpBalance: user.rrpBalance });
 });
 
 // ✅ GET /api/cashier/balance?username=Wolf
@@ -99,13 +110,16 @@ router.get('/balance', async (req, res) => {
   if (!username) return res.status(400).json({ error: 'Missing username' });
 
   if (username.startsWith('guest')) {
-    return res.status(200).json({ balance: 0 });
+    return res.status(200).json({ rrcBalance: 0, rrpBalance: 0 });
   }
 
-  const player = await Player.findOne({ username });
-  if (!player) return res.status(404).json({ error: 'Player not found' });
+  const user = await User.findOne({ username });
+  if (!user) return res.status(404).json({ error: 'User not found' });
 
-  res.status(200).json({ balance: player.balance });
+  res.status(200).json({
+    rrcBalance: user.rrcBalance,
+    rrpBalance: user.rrpBalance
+  });
 });
 
 module.exports = router;
