@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Tournament = require('../models/Tournament');
+const User = require('../models/User');
 const { BracketManager } = require('../utils/bracketManager'); // uses your merged file
 
 module.exports = function(io) {
@@ -23,6 +24,20 @@ module.exports = function(io) {
 
       const manager = new BracketManager(io, tournament);
       manager.recordResult(matchId, winnerId);
+
+      // 🎁 Reward winner with RRP
+      try {
+        const user = await User.findOne({ username: winnerId });
+        if (user) {
+          user.rrpBalance += 25; // reward amount
+          await user.save();
+          console.log(`✅ ${winnerId} earned 25 RRP (new balance: ${user.rrpBalance})`);
+        } else {
+          console.warn("⚠️ Winner not found in User collection:", winnerId);
+        }
+      } catch (rewardErr) {
+        console.error("❌ Error rewarding RRP:", rewardErr);
+      }
 
       return res.status(200).json({ message: `Winner recorded for ${matchId}` });
     } catch (err) {
