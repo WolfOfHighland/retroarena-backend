@@ -78,7 +78,7 @@ module.exports = function (io) {
             goalieMode: tournament.goalieMode,
             periodLength: tournament.periodLength,
             round,
-            matchIndex: index,
+            matchIndex: index
           });
 
           const matchDoc = new MatchState({
@@ -161,7 +161,7 @@ module.exports = function (io) {
           goalieMode: tournament.goalieMode,
           periodLength: tournament.periodLength,
           round,
-          matchIndex: index,
+          matchIndex: index
         });
 
         pair.forEach(player => {
