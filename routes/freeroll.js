@@ -6,6 +6,7 @@ const {
   generateBracket,
   createMatchState,
   advanceWinners,
+  BracketManager
 } = require('../utils/bracketManager');
 
 module.exports = function (io) {
@@ -102,6 +103,7 @@ module.exports = function (io) {
         const rakePercent = tournament.rakePercent ?? 0.10;
         const netEntry = tournament.entryFee * (1 - rakePercent);
         tournament.prizeAmount = netEntry * tournament.maxPlayers;
+        tournament.status = 'live';
         await tournament.save();
 
         // Auto-clone
@@ -135,7 +137,7 @@ module.exports = function (io) {
     }
   });
 
-  // ✅ POST /emit-match — manually emit matchStart for a full freeroll
+  // ✅ POST /freeroll/emit-match — manually emit matchStart
   router.post('/emit-match', async (req, res) => {
     const { tournamentId } = req.body;
 
@@ -172,6 +174,24 @@ module.exports = function (io) {
     } catch (err) {
       console.error(`❌ Manual emit error for ${tournamentId}:`, err.message);
       res.status(500).json({ error: 'Server error' });
+    }
+  });
+
+  // ✅ POST /freeroll/match-result — record result and advance bracket
+  router.post('/match-result', async (req, res) => {
+    const { matchId, winnerId, tournamentId } = req.body;
+
+    try {
+      const tournament = await Tournament.findOne({ id: tournamentId });
+      if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+
+      const manager = new BracketManager(io, tournament);
+      await manager.recordResult(matchId, winnerId);
+
+      res.status(200).json({ message: 'Match result recorded', winnerId });
+    } catch (err) {
+      console.error(`❌ Error recording result for ${matchId}:`, err.message);
+      res.status(500).json({ error: 'Failed to record match result' });
     }
   });
 
