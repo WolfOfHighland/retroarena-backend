@@ -61,79 +61,43 @@ module.exports = function(io) {
 
   // POST /api/tournaments/create
   router.post('/create', async (req, res) => {
-  const { id, maxPlayers, rom, core, goalieMode, periodLength, players } = req.body;
+    const { id, maxPlayers, rom, core, goalieMode, periodLength, players } = req.body;
 
-  console.log('[RRC] Incoming tournament payload:', req.body);
+    console.log('[RRC] Incoming tournament payload:', req.body);
 
-  if (!id || !Array.isArray(players) || players.length < 2) {
-    console.warn('⚠️ Invalid tournament payload');
-    return res.status(400).json({ error: 'Invalid tournament payload' });
-  }
+    if (!id || !Array.isArray(players) || players.length < 2) {
+      console.warn('⚠️ Invalid tournament payload');
+      return res.status(400).json({ error: 'Invalid tournament payload' });
+    }
 
-  try {
-    const tournament = new Tournament({
-      id,
-      name: id,
-      maxPlayers,
-      rom,
-      core,
-      goalieMode,
-      periodLength,
-      registeredPlayers: players.map(p => ({
-        id: p,
-        displayName: p,
-        isGuest: false
-      })),
-      status: 'scheduled',
-      type: 'scheduled',
-      game: 'NHL 95'
-    });
-
-    await tournament.save();
-    console.log('✅ Tournament created:', tournament);
-
-    const round = 1;
-    const bracket = generateBracket(players);
-
-    bracket.forEach((pair, index) => {
-      const matchId = `${id}-r${round}-m${index}`;
-      const matchState = {
-        ...createMatchState(matchId, pair, {
-          rom,
-          core,
-          goalieMode,
-          periodLength,
-          round,
-          matchIndex: index
-        }),
-        tournamentId: id
-      };
-
-      console.log(`🧪 Saving matchState for ${matchId}`);
-      console.log('🧪 Generated matchState:', matchState);
-
-      pair.forEach(playerId => {
-        io.to(playerId).emit('matchStart', matchState);
+    try {
+      const tournament = new Tournament({
+        id,
+        name: id,
+        maxPlayers,
+        rom,
+        core,
+        goalieMode,
+        periodLength,
+        registeredPlayers: players.map(p => ({
+          id: p,
+          displayName: p,
+          isGuest: false
+        })),
+        status: 'scheduled',
+        type: 'scheduled',
+        game: 'NHL 95'
       });
 
-      console.log(`🎮 Emitted matchStart for ${matchId}`);
-    });
+      await tournament.save();
+      console.log('✅ Tournament created:', tournament);
 
-    tournament.status = 'live';
-    await tournament.save();
-
-    res.status(201).json({ message: 'Tournament created', tournament });
-  } catch (err) {
-    console.error('❌ Tournament creation failed:', err.stack || err.message);
-    res.status(500).json({ error: 'Tournament creation failed' });
-  }
-});
-      // Auto-start if full
       if (maxPlayers && players.length === maxPlayers) {
         const round = 1;
         const bracket = generateBracket(players);
 
-        bracket.forEach((pair, index) => {
+        for (let index = 0; index < bracket.length; index++) {
+          const pair = bracket[index];
           const matchId = `${id}-r${round}-m${index}`;
           const matchState = {
             ...createMatchState(matchId, pair, {
@@ -155,7 +119,7 @@ module.exports = function(io) {
           });
 
           console.log(`🎮 Emitted matchStart for ${matchId}`);
-        });
+        }
 
         tournament.status = 'live';
         await tournament.save();
@@ -212,7 +176,8 @@ module.exports = function(io) {
         const round = 1;
         const bracket = generateBracket(tournament.registeredPlayers);
 
-        bracket.forEach((pair, index) => {
+        for (let index = 0; index < bracket.length; index++) {
+          const pair = bracket[index];
           const matchId = `${tournament.id}-r${round}-m${index}`;
           const matchState = {
             ...createMatchState(matchId, pair, {
@@ -234,7 +199,7 @@ module.exports = function(io) {
           });
 
           console.log(`🎮 Emitted matchStart for ${matchId}`);
-        });
+        }
 
         tournament.status = 'live';
         await tournament.save();
