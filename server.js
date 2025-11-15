@@ -8,17 +8,15 @@ const { createAdapter } = require('@socket.io/redis-adapter');
 const { createClient } = require('redis');
 const cors = require('cors');
 
-// Routes and utilities
 const webhookRoutes = require('./routes/webhooks');
 const freerollRoutes = require('./routes/freeroll');
 const seedOpeningDay = require('./scripts/seedOpeningDay');
 const { saveMatchState, loadMatchState, setRedis } = require('./utils/matchState');
-const { emitTournamentSchedule, scheduleAllTournaments, watchSitNGoTables } = require('./scheduler/emitTournamentSchedule'); // ✅ FIXED import
+const { emitTournamentSchedule, scheduleAllTournaments, watchSitNGoTables } = require('./scheduler/emitTournamentSchedule');
 
 const Player = require('./models/Player');
 const Tournament = require('./models/Tournament');
 
-// Express setup
 const app = express();
 app.use(cors({
   origin: [
@@ -31,7 +29,6 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// HTTP + Socket.IO setup
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -41,13 +38,11 @@ const io = new Server(server, {
 });
 module.exports.io = io;
 
-// API logger
 app.use('/api', (req, _res, next) => {
   console.log(`➡️ API ${req.method} ${req.originalUrl}`);
   next();
 });
 
-// Routes
 app.use('/api/match', require('./routes/match'));
 app.use('/api/sit-n-go', require('./routes/sit-n-go'));
 app.use('/api/sit-n-go', require('./routes/sit-n-go-join')(io));
@@ -55,16 +50,14 @@ app.use('/api/tournaments', require('./routes/tournaments')(io));
 app.use('/api/tournaments', require('./routes/tournaments-join'));
 app.use('/api/cashier', require('./routes/cashier'));
 app.use('/api/freeroll', freerollRoutes(io));
-app.use("/api/dev", freerollRoutes(io)); // ✅ exposes /api/dev/emit-match
+app.use("/api/dev", freerollRoutes(io));
 app.use('/webhooks', webhookRoutes);
 console.log('✅ Webhook routes loaded');
 
-// Health checks
 app.get("/", (_req, res) => res.send("Retro Rumble Arena backend is live 🐺"));
 app.get("/api/ping", (_req, res) => res.send("pong"));
 app.get("/ping", (_req, res) => res.send("pong"));
 
-// MatchStates via Redis
 app.get('/api/matchstates', async (req, res) => {
   const { tournamentId } = req.query;
   if (!tournamentId) return res.status(400).json({ error: 'Missing tournamentId' });
@@ -92,7 +85,6 @@ app.get('/api/matchstates', async (req, res) => {
   }
 });
 
-// Socket.IO handlers
 io.on('connection', (socket) => {
   console.log(`✅ Socket connected: ${socket.id}`);
 
@@ -145,7 +137,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Redis setup
 let redis;
 if (process.env.REDIS_URL) {
   const pubClient = createClient({ url: process.env.REDIS_URL });
@@ -168,7 +159,6 @@ if (process.env.REDIS_URL) {
   console.log('⚠️ No REDIS_URL provided — skipping Redis adapter');
 }
 
-// MongoDB setup ✅ PATCHED WITH emitTournamentSchedule
 if (process.env.MONGO_URI) {
   mongoose.connect(process.env.MONGO_URI, {
     dbName: 'retro_rumble',
@@ -183,7 +173,7 @@ if (process.env.MONGO_URI) {
     });
 
     await seedOpeningDay();
-    emitTournamentSchedule(io); // ✅ Now defined and imported
+    emitTournamentSchedule(io);
     watchSitNGoTables(io);
   }).catch((err) => {
     console.error('⚠️ MongoDB connection failed:', err.message);
@@ -192,7 +182,6 @@ if (process.env.MONGO_URI) {
   console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
 }
 
-// Custom routes
 app.post('/register-player', async (req, res) => {
   const { username, email, country, socketId } = req.body;
   if (!username?.trim() || !email?.trim()) {
@@ -260,7 +249,17 @@ app.post("/start-match", async (req, res) => {
     };
 
     await saveMatchState(tournamentId, matchState);
-    io.to(tournamentId).emit("matchStart", matchState); // ✅ Emits matchStart to tournament room
+
+    // ✅ Emit launchEmulator to each registered player
+    for (const playerId of tournament.registeredPlayers || []) {
+      const launchUrl = `https://www.retrorumblearena.com/arena/?core=${core}&rom=${rom}&matchId=${tournamentId}`;
+      io.to(playerId).emit("launchEmulator", { matchId: tournamentId, launchUrl });
+      console.log(`📡 Emitted launchEmulator to ${playerId}: ${launchUrl}`);
+    }
+
+    // ✅ Emit matchStart to tournament room
+    io.to(tournamentId).emit("matchStart", matchState);
+    console.log(`📡 Emitted matchStart to room ${tournamentId}`);
 
     return res.status(200).json({
       ok: true,
@@ -280,7 +279,6 @@ app._router.stack
     console.log(`🔍 Mounted route: ${method} ${path}`);
   });
 
-// Server boot
 const PORT = process.env.PORT || 10000;
 
 server.listen(PORT, () => {
