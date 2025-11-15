@@ -36,16 +36,20 @@ router.post('/start-match', async (req, res) => {
 
     matchPairs.forEach((pair, index) => {
       const matchId = `${tournamentId}-r1-${index}`;
+      const launchUrl = `https://www.retrorumblearena.com/arena/?core=${core}&rom=${rom}&matchId=${matchId}`;
+
       const matchState = createMatchState(matchId, pair, {
         rom,
         core,
         goalieMode: tournament.goalieMode || "manual",
         periodLength: tournament.periodLength || 5,
+        launchUrl, // ✅ Injected here
       });
 
-      // Tell each player to join the match room
+      // Emit to each player individually
       pair.forEach(playerId => {
         io.to(playerId).emit("assignMatchRoom", { matchId });
+        io.to(playerId).emit("launchEmulator", { matchId, launchUrl }); // ✅ New event
       });
 
       // Emit to shared match room
@@ -55,6 +59,7 @@ router.post('/start-match', async (req, res) => {
       emittedMatches.push({
         matchId,
         players: pair,
+        launchUrl,
       });
     });
 
