@@ -1,4 +1,9 @@
-// ... existing imports ...
+const express = require("express");
+const router = express.Router();
+const Tournament = require("../models/Tournament");
+const MatchState = require("../models/MatchState");
+const { generateBracket, createMatchState } = require("../utils/bracketManager");
+
 
 module.exports = function (io) {
   const router = express.Router();
