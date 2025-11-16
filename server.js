@@ -92,10 +92,10 @@ io.on('connection', (socket) => {
     console.log(`📡 Received socket event: ${event}`, payload);
   });
 
-  socket.on("registerRoom", ({ room }) => {
-    socket.join(room);
-    console.log(`📡 Socket ${socket.id} joined room: ${room}`);
-  });
+  socket.on("join", (playerId) => {
+  socket.join(playerId);
+  console.log(`🧩 Socket ${socket.id} joined room: ${playerId}`);
+});
 
   socket.on("joinTournament", (room) => {
     socket.join(room);
