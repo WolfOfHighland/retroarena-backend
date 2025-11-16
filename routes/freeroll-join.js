@@ -42,13 +42,12 @@ module.exports = function (io) {
       await tournament.save();
 
       if (tournament.registeredPlayers.length >= 2) {
-        const payload = buildMatchPayload(tournament);
-        tournament.registeredPlayers.forEach((p) => {
-          const room = typeof p === "string" ? p : p.id;
-          io.to(room).emit("matchStart", payload);
-          console.log(`🎮 matchStart emitted to ${room}`);
-        });
-      }
+  const payload = buildMatchPayload(tournament);
+  const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${payload.core}&rom=${payload.rom}&matchId=${payload.matchId}&goalieMode=auto`;
+
+  io.to(tournament.id).emit("launchEmulator", { matchId: payload.matchId, launchUrl });
+  console.log(`📡 launchEmulator emitted to ${tournament.id}: ${launchUrl}`);
+}
 
       res.status(200).json({ message: "Joined freeroll", tournament });
     } catch (err) {
@@ -69,11 +68,10 @@ module.exports = function (io) {
       }
 
       const payload = buildMatchPayload(tournament);
-      tournament.registeredPlayers.forEach((p) => {
-        const room = typeof p === "string" ? p : p.id;
-        io.to(room).emit("matchStart", payload);
-        console.log(`🎮 matchStart manually emitted to ${room}`);
-      });
+      const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${payload.core}&rom=${payload.rom}&matchId=${payload.matchId}&goalieMode=auto`;
+
+io.to(tournament.id).emit("launchEmulator", { matchId: payload.matchId, launchUrl });
+console.log(`📡 launchEmulator emitted to ${tournament.id}: ${launchUrl}`);
 
       res.status(200).json({ message: "matchStart emitted", tournamentId });
     } catch (err) {

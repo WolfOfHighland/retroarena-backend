@@ -31,8 +31,6 @@ module.exports = function (io) {
       let bracketCount = 0;
       const round = 1;
 
-      const bootUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${tournament.core || "genesis_plus_gx"}&rom=${tournament.rom || "NHL_95.bin"}`;
-
       while (unprocessed.length >= BRACKET_SIZE) {
         const bracketPlayers = unprocessed.splice(0, BRACKET_SIZE);
         bracketCount++;
@@ -51,7 +49,7 @@ module.exports = function (io) {
             players: pair,
             round,
             matchIndex: index,
-            rom: bootUrl,
+            rom: tournament.rom || "NHL_95.bin",
             core: tournament.core || "genesis_plus_gx",
             goalieMode: tournament.goalieMode,
             periodLength: tournament.periodLength,
@@ -61,11 +59,18 @@ module.exports = function (io) {
           await matchDoc.save();
           console.log(`💾 Saved matchState for ${matchId}`);
 
-          for (const player of pair) {
-            io.to(player).emit("matchStart", matchState);
-            console.log(`🎮 matchStart emitted to ${player}`);
-            matched.add(player);
-          }
+          const params = new URLSearchParams({
+            core: matchState.core,
+            rom: matchState.rom,
+            matchId: matchState.matchId,
+            goalieMode: matchState.goalieMode || "auto",
+          });
+
+          const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?${params.toString()}`;
+          io.to(tournament.id).emit("launchEmulator", { matchId, launchUrl });
+          console.log(`📡 launchEmulator emitted to ${tournament.id}: ${launchUrl}`);
+
+          pair.forEach(player => matched.add(player));
         }
       }
 
