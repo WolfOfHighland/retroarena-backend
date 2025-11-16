@@ -53,7 +53,9 @@ module.exports = function (io) {
         io.to(updated.id).emit("launchEmulator", { matchId: payload.matchId, launchUrl });
         console.log(`📡 launchEmulator emitted to ${updated.id}: ${launchUrl}`);
 
-        // 🔔 Notify frontend to refresh Sit-n-Go lobby
+        io.to(updated.id).emit("matchStart", payload);
+        console.log(`📡 matchStart emitted to room ${updated.id}`);
+
         io.emit("sitngoUpdated");
         console.log(`🔔 sitngoUpdated emitted`);
       }
@@ -81,6 +83,9 @@ module.exports = function (io) {
 
       io.to(tournament.id).emit("launchEmulator", { matchId: payload.matchId, launchUrl });
       console.log(`📡 launchEmulator emitted to ${tournament.id}: ${launchUrl}`);
+
+      io.to(tournament.id).emit("matchStart", payload);
+      console.log(`📡 matchStart emitted to room ${tournament.id}`);
 
       res.status(200).json({ message: "matchStart emitted", tournamentId });
     } catch (err) {

@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Tournament = require("../models/Tournament");
 const MatchState = require("../models/MatchState");
-const { generateBracket, createMatchState } = require("../utils/bracketManager");
+const { generateBracket } = require("../utils/bracketManager");
 
 const BRACKET_SIZE = 8;
 
@@ -74,13 +74,16 @@ module.exports = function (io) {
           });
 
           const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?${params.toString()}`;
+
           io.to(updated.id).emit("launchEmulator", { matchId, launchUrl });
           console.log(`📡 launchEmulator emitted to ${updated.id}: ${launchUrl}`);
+
+          io.to(updated.id).emit("matchStart", matchState);
+          console.log(`📡 matchStart emitted to room ${updated.id}:`, matchState);
 
           pair.forEach(player => matched.add(player));
         }
 
-        // 🔔 Notify frontend to refresh Sit-n-Go lobby
         io.emit("sitngoUpdated");
         console.log(`🔔 sitngoUpdated emitted`);
       }

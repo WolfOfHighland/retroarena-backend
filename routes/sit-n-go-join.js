@@ -2,8 +2,8 @@ const express = require("express");
 const router = express.Router();
 const Tournament = require("../models/Tournament");
 const MatchState = require("../models/MatchState");
-const { generateBracket, createMatchState } = require("../utils/bracketManager");
-
+const User = require("../models/User");
+const { generateBracket } = require("../utils/bracketManager");
 
 module.exports = function (io) {
   const router = express.Router();
@@ -57,7 +57,6 @@ module.exports = function (io) {
       await tournament.save();
       console.log(`✅ Saved ${playerId} to tournament ${tournament.id}`);
 
-      // 🔁 Re-fetch to ensure fresh player count
       const updated = await Tournament.findOne({ id });
       if (updated.registeredPlayers.length === updated.maxPlayers) {
         const round = 1;
@@ -93,8 +92,12 @@ module.exports = function (io) {
           });
 
           const launchUrl = `${bootUrlBase}?${params.toString()}`;
+
           io.to(updated.id).emit("launchEmulator", { matchId, launchUrl });
           console.log(`📡 launchEmulator emitted to ${updated.id}: ${launchUrl}`);
+
+          io.to(updated.id).emit("matchStart", matchState);
+          console.log(`📡 matchStart emitted to room ${updated.id}:`, matchState);
         }
 
         const rakePercent = updated.rakePercent ?? 0.10;
@@ -125,8 +128,6 @@ module.exports = function (io) {
         await newTournament.save();
         console.log(`🧬 Auto-cloned new tournament: ${newTournament.id}`);
         io.emit('tournamentCreated', newTournament);
-
-        // 🔔 Notify frontend to refresh Sit-n-Go lobby
         io.emit("sitngoUpdated");
         console.log(`🔔 sitngoUpdated emitted`);
       }
