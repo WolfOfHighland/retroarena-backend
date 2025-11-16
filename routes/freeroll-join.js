@@ -41,15 +41,20 @@ module.exports = function (io) {
       tournament.registeredPlayers.push({ id: playerId, displayName: playerId });
       await tournament.save();
 
-      if (tournament.registeredPlayers.length >= 2) {
-  const payload = buildMatchPayload(tournament);
-  const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${payload.core}&rom=${payload.rom}&matchId=${payload.matchId}&goalieMode=auto`;
+      // 🔁 Re-fetch to ensure fresh player count
+      const updated = await Tournament.findOne({ id, entryFee: 0 });
 
-  io.to(tournament.id).emit("launchEmulator", { matchId: payload.matchId, launchUrl });
-  console.log(`📡 launchEmulator emitted to ${tournament.id}: ${launchUrl}`);
-}
+      console.log(`🧪 Player count after join: ${updated.registeredPlayers.length}`);
 
-      res.status(200).json({ message: "Joined freeroll", tournament });
+      if (updated.registeredPlayers.length >= 2) {
+        const payload = buildMatchPayload(updated);
+        const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${payload.core}&rom=${payload.rom}&matchId=${payload.matchId}&goalieMode=auto`;
+
+        io.to(updated.id).emit("launchEmulator", { matchId: payload.matchId, launchUrl });
+        console.log(`📡 launchEmulator emitted to ${updated.id}: ${launchUrl}`);
+      }
+
+      res.status(200).json({ message: "Joined freeroll", tournament: updated });
     } catch (err) {
       console.error(`❌ Freeroll join error for ${id}:`, err.message);
       res.status(500).json({ error: "Server error" });
@@ -70,8 +75,8 @@ module.exports = function (io) {
       const payload = buildMatchPayload(tournament);
       const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${payload.core}&rom=${payload.rom}&matchId=${payload.matchId}&goalieMode=auto`;
 
-io.to(tournament.id).emit("launchEmulator", { matchId: payload.matchId, launchUrl });
-console.log(`📡 launchEmulator emitted to ${tournament.id}: ${launchUrl}`);
+      io.to(tournament.id).emit("launchEmulator", { matchId: payload.matchId, launchUrl });
+      console.log(`📡 launchEmulator emitted to ${tournament.id}: ${launchUrl}`);
 
       res.status(200).json({ message: "matchStart emitted", tournamentId });
     } catch (err) {

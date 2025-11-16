@@ -35,15 +35,15 @@ module.exports = function (io) {
         ? tournament.registeredPlayers.map(p => (typeof p === 'string' ? { id: p } : p))
         : [];
 
-      if (tournament.registeredPlayers.length >= tournament.maxPlayers) {
-        console.log(`🚫 Tournament ${tournament.id} is full`);
-        return res.status(403).json({ error: 'Tournament is full' });
-      }
-
       const alreadyJoined = tournament.registeredPlayers.some(p => p.id === playerId);
       if (alreadyJoined) {
         console.log(`⚠️ Player ${playerId} already joined ${tournament.name}`);
         return res.status(200).json({ message: 'Already joined' });
+      }
+
+      if (tournament.registeredPlayers.length >= tournament.maxPlayers) {
+        console.log(`🚫 Tournament ${tournament.id} is full`);
+        return res.status(403).json({ error: 'Tournament is full' });
       }
 
       user.wallet -= tournament.entryFee;
@@ -60,26 +60,27 @@ module.exports = function (io) {
       await tournament.save();
       console.log(`✅ Saved ${playerId} to tournament ${tournament.id}`);
 
-      if (tournament.registeredPlayers.length === tournament.maxPlayers) {
+      // 🔁 Re-fetch to ensure fresh player count
+      const updated = await Tournament.findOne({ id });
+      if (updated.registeredPlayers.length === updated.maxPlayers) {
         const round = 1;
-        const bracket = generateBracket(tournament.registeredPlayers.map(p => p.id));
-
+        const bracket = generateBracket(updated.registeredPlayers.map(p => p.id));
         const bootUrlBase = `https://www.retrorumblearena.com/Retroarch-Browser/index.html`;
 
         for (let index = 0; index < bracket.length; index++) {
           const pair = bracket[index];
-          const matchId = `${tournament.id}-r${round}-m${index}`;
+          const matchId = `${updated.id}-r${round}-m${index}`;
 
           const matchState = {
             matchId,
-            tournamentId: tournament.id,
+            tournamentId: updated.id,
             players: pair,
             round,
             matchIndex: index,
-            rom: tournament.rom || "NHL_95.bin",
-            core: tournament.core || "genesis_plus_gx",
-            goalieMode: tournament.goalieMode,
-            periodLength: tournament.periodLength
+            rom: updated.rom || "NHL_95.bin",
+            core: updated.core || "genesis_plus_gx",
+            goalieMode: updated.goalieMode,
+            periodLength: updated.periodLength
           };
 
           const matchDoc = new MatchState(matchState);
@@ -95,33 +96,33 @@ module.exports = function (io) {
           });
 
           const launchUrl = `${bootUrlBase}?${params.toString()}`;
-          io.to(tournament.id).emit("launchEmulator", { matchId, launchUrl });
-          console.log(`📡 launchEmulator emitted to ${tournament.id}: ${launchUrl}`);
+          io.to(updated.id).emit("launchEmulator", { matchId, launchUrl });
+          console.log(`📡 launchEmulator emitted to ${updated.id}: ${launchUrl}`);
         }
 
-        const rakePercent = tournament.rakePercent ?? 0.10;
-        const netEntry = tournament.entryFee * (1 - rakePercent);
-        tournament.prizeAmount = netEntry * tournament.maxPlayers;
-        await tournament.save();
-        console.log(`💰 Prize pool updated to $${tournament.prizeAmount}`);
+        const rakePercent = updated.rakePercent ?? 0.10;
+        const netEntry = updated.entryFee * (1 - rakePercent);
+        updated.prizeAmount = netEntry * updated.maxPlayers;
+        await updated.save();
+        console.log(`💰 Prize pool updated to $${updated.prizeAmount}`);
 
         const newTournament = new Tournament({
-          id: `${tournament.id}-clone-${Date.now()}`,
-          name: tournament.name,
-          game: tournament.game,
-          goalieMode: tournament.goalieMode,
-          periodLength: tournament.periodLength,
+          id: `${updated.id}-clone-${Date.now()}`,
+          name: updated.name,
+          game: updated.game,
+          goalieMode: updated.goalieMode,
+          periodLength: updated.periodLength,
           status: 'scheduled',
-          type: tournament.type,
+          type: updated.type,
           registeredPlayers: [],
-          entryFee: tournament.entryFee,
-          maxPlayers: tournament.maxPlayers,
-          prizeType: tournament.prizeType,
+          entryFee: updated.entryFee,
+          maxPlayers: updated.maxPlayers,
+          prizeType: updated.prizeType,
           prizeAmount: 0,
-          elimination: tournament.elimination,
-          rom: tournament.rom,
-          core: tournament.core,
-          rakePercent: tournament.rakePercent
+          elimination: updated.elimination,
+          rom: updated.rom,
+          core: updated.core,
+          rakePercent: updated.rakePercent
         });
 
         await newTournament.save();

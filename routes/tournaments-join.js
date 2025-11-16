@@ -9,24 +9,32 @@ const BRACKET_SIZE = 8;
 module.exports = function (io) {
   router.post("/join/:id", async (req, res) => {
     try {
-      const tournament = await Tournament.findOne({ id: req.params.id });
-      if (!tournament) return res.status(404).json({ error: "Tournament not found" });
-
+      const { id } = req.params;
       const { playerId } = req.body;
+
       if (!playerId) return res.status(400).json({ error: "Missing playerId" });
 
-      const alreadyJoined = tournament.registeredPlayers?.includes(playerId);
+      const tournament = await Tournament.findOne({ id });
+      if (!tournament) return res.status(404).json({ error: "Tournament not found" });
+
+      // Normalize registeredPlayers to object format
+      tournament.registeredPlayers = Array.isArray(tournament.registeredPlayers)
+        ? tournament.registeredPlayers.map(p => (typeof p === "string" ? { id: p } : p))
+        : [];
+
+      const alreadyJoined = tournament.registeredPlayers.some(p => p.id === playerId);
       if (alreadyJoined) {
         console.log(`⚠️ Player ${playerId} already registered for ${tournament.name}`);
         return res.status(200).json({ message: "Already registered" });
       }
 
-      tournament.registeredPlayers.push(playerId);
+      tournament.registeredPlayers.push({ id: playerId });
       await tournament.save();
-
       console.log(`✅ Player ${playerId} registered for ${tournament.name}`);
 
-      const unprocessed = [...tournament.registeredPlayers];
+      // 🔁 Re-fetch to ensure fresh player count
+      const updated = await Tournament.findOne({ id });
+      const unprocessed = updated.registeredPlayers.map(p => p.id);
       const matched = new Set();
       let bracketCount = 0;
       const round = 1;
@@ -36,23 +44,22 @@ module.exports = function (io) {
         bracketCount++;
 
         console.log(`🎯 Creating bracket ${bracketCount} with players:`, bracketPlayers);
-
         const matches = generateBracket(bracketPlayers);
 
         for (let index = 0; index < matches.length; index++) {
           const pair = matches[index];
-          const matchId = `${tournament.id}-bracket${bracketCount}-r${round}-m${index}`;
+          const matchId = `${updated.id}-bracket${bracketCount}-r${round}-m${index}`;
 
           const matchState = {
             matchId,
-            tournamentId: tournament.id,
+            tournamentId: updated.id,
             players: pair,
             round,
             matchIndex: index,
-            rom: tournament.rom || "NHL_95.bin",
-            core: tournament.core || "genesis_plus_gx",
-            goalieMode: tournament.goalieMode,
-            periodLength: tournament.periodLength,
+            rom: updated.rom || "NHL_95.bin",
+            core: updated.core || "genesis_plus_gx",
+            goalieMode: updated.goalieMode,
+            periodLength: updated.periodLength,
           };
 
           const matchDoc = new MatchState(matchState);
@@ -67,14 +74,14 @@ module.exports = function (io) {
           });
 
           const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?${params.toString()}`;
-          io.to(tournament.id).emit("launchEmulator", { matchId, launchUrl });
-          console.log(`📡 launchEmulator emitted to ${tournament.id}: ${launchUrl}`);
+          io.to(updated.id).emit("launchEmulator", { matchId, launchUrl });
+          console.log(`📡 launchEmulator emitted to ${updated.id}: ${launchUrl}`);
 
           pair.forEach(player => matched.add(player));
         }
       }
 
-      const remaining = tournament.registeredPlayers.filter((p) => !matched.has(p));
+      const remaining = updated.registeredPlayers.filter(p => !matched.has(p.id));
       console.log(`⏳ Waiting pool: ${remaining.length} players`);
 
       res.status(200).json({ message: "Registered successfully" });
