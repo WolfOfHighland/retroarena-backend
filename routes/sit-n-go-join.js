@@ -1,12 +1,4 @@
-const express = require('express');
-const Tournament = require('../models/Tournament');
-const MatchState = require('../models/MatchState');
-const User = require('../models/User');
-const {
-  generateBracket,
-  createMatchState,
-  advanceWinners,
-} = require('../utils/bracketManager');
+// ... existing imports ...
 
 module.exports = function (io) {
   const router = express.Router();
@@ -128,6 +120,10 @@ module.exports = function (io) {
         await newTournament.save();
         console.log(`🧬 Auto-cloned new tournament: ${newTournament.id}`);
         io.emit('tournamentCreated', newTournament);
+
+        // 🔔 Notify frontend to refresh Sit-n-Go lobby
+        io.emit("sitngoUpdated");
+        console.log(`🔔 sitngoUpdated emitted`);
       }
 
       res.status(200).json({ message: 'Joined successfully' });

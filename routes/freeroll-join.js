@@ -52,6 +52,10 @@ module.exports = function (io) {
 
         io.to(updated.id).emit("launchEmulator", { matchId: payload.matchId, launchUrl });
         console.log(`📡 launchEmulator emitted to ${updated.id}: ${launchUrl}`);
+
+        // 🔔 Notify frontend to refresh Sit-n-Go lobby
+        io.emit("sitngoUpdated");
+        console.log(`🔔 sitngoUpdated emitted`);
       }
 
       res.status(200).json({ message: "Joined freeroll", tournament: updated });

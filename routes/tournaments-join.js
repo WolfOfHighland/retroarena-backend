@@ -79,6 +79,10 @@ module.exports = function (io) {
 
           pair.forEach(player => matched.add(player));
         }
+
+        // 🔔 Notify frontend to refresh Sit-n-Go lobby
+        io.emit("sitngoUpdated");
+        console.log(`🔔 sitngoUpdated emitted`);
       }
 
       const remaining = updated.registeredPlayers.filter(p => !matched.has(p.id));
