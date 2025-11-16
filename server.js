@@ -252,7 +252,7 @@ app.post("/start-match", async (req, res) => {
 
     // ✅ Emit launchEmulator to each registered player
     for (const playerId of tournament.registeredPlayers || []) {
-      const launchUrl = `https://www.retrorumblearena.com/arena/?core=${core}&rom=${rom}&matchId=${tournamentId}`;
+      const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${core}&rom=${rom}&matchId=${tournamentId}`;
       io.to(playerId).emit("launchEmulator", { matchId: tournamentId, launchUrl });
       console.log(`📡 Emitted launchEmulator to ${playerId}: ${launchUrl}`);
     }
