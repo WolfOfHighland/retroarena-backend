@@ -250,16 +250,18 @@ app.post("/start-match", async (req, res) => {
     await saveMatchState(tournamentId, matchState);
 
     // ✅ Delay emit to ensure sockets join rooms
-    setTimeout(() => {
-      for (const playerId of tournament.registeredPlayers || []) {
-        const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${core}&rom=${rom}&matchId=${tournamentId}`;
-        io.to(playerId).emit("launchEmulator", { matchId: tournamentId, launchUrl });
-        console.log(`📡 Emitted launchEmulator to ${playerId}: ${launchUrl}`);
-      }
+setTimeout(() => {
+  for (const playerId of tournament.registeredPlayers || []) {
+    const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${core}&rom=${rom}&matchId=${tournamentId}`;
+    console.log(`🧪 Preparing to emit launchEmulator to ${playerId}`);
+    io.to(playerId).emit("launchEmulator", { matchId: tournamentId, launchUrl });
+    console.log(`📡 Emitted launchEmulator to ${playerId}: ${launchUrl}`);
+  }
 
-      io.to(tournamentId).emit("matchStart", matchState);
-      console.log(`📡 Emitted matchStart to room ${tournamentId}`);
-    }, 1000); // 1 second delay
+  io.to(tournamentId).emit("matchStart", matchState);
+  console.log(`📡 Emitted matchStart to room ${tournamentId}`);
+}, 1000);
+
 
     return res.status(200).json({
       ok: true,
