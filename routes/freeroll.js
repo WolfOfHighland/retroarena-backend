@@ -14,19 +14,22 @@ module.exports = function (io) {
 
   // ✅ GET /freeroll — fetch scheduled freeroll tournaments
   router.get('/', async (req, res) => {
-    try {
-      const tournaments = await Tournament.find({
-        entryFee: 0,
-        type: 'sit-n-go',
-        status: 'scheduled'
-      }).sort({ createdAt: -1 });
+  try {
+    const all = await Tournament.find({ type: 'freeroll' });
+    console.log(`📦 Found ${all.length} freeroll tournaments total`);
 
-      res.status(200).json(tournaments);
-    } catch (err) {
-      console.error('❌ Failed to fetch freerolls:', err);
-      res.status(500).json({ error: 'Server error' });
-    }
-  });
+    const filtered = all.filter(t => 
+      t.entryFee === 0 &&
+      t.status === 'scheduled'
+    );
+    console.log(`🎯 Returning ${filtered.length} scheduled freerolls`);
+
+    res.status(200).json(filtered);
+  } catch (err) {
+    console.error('❌ Failed to fetch freerolls:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
   // ✅ POST /freeroll/register/:id — join a freeroll and spawn matches
   router.post('/register/:id', async (req, res) => {
@@ -192,6 +195,21 @@ module.exports = function (io) {
     } catch (err) {
       console.error(`❌ Error recording result for ${matchId}:`, err.message);
       res.status(500).json({ error: 'Failed to record match result' });
+    }
+  });
+
+  // ✅ GET /freeroll/match/:matchId — fetch matchState by matchId for manual boot
+  router.get('/match/:matchId', async (req, res) => {
+    const { matchId } = req.params;
+
+    try {
+      const match = await MatchState.findOne({ matchId });
+      if (!match) return res.status(404).json({ error: 'Match not found' });
+
+      res.status(200).json(match);
+    } catch (err) {
+      console.error(`❌ Failed to fetch match ${matchId}:`, err.message);
+      res.status(500).json({ error: 'Server error' });
     }
   });
 

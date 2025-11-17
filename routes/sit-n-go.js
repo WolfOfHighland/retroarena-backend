@@ -4,7 +4,6 @@ const Tournament = require('../models/Tournament');
 const MatchState = require('../models/MatchState');
 const { generateBracket, createMatchState } = require('../utils/bracketManager');
 
-// Helper to safely parse maxPlayers
 const getMaxPlayers = (val) => {
   if (typeof val === 'number') return val;
   const parsed = Number(val);
@@ -12,24 +11,23 @@ const getMaxPlayers = (val) => {
 };
 
 module.exports = function(io) {
-  // GET /api/sit-n-go
+  // ✅ GET /api/sit-n-go — fetch visible tournaments
   router.get('/', async (req, res) => {
     try {
       const showAll = req.query.all === 'true';
 
-      const tournaments = await Tournament.find({
-        type: 'sit-n-go',
-        status: 'scheduled',
-        startTime: null
-      });
+      const all = await Tournament.find({ type: 'sit-n-go' }).sort({ createdAt: -1 });
+      console.log(`📦 Found ${all.length} sit-n-go tournaments total`);
 
       const filtered = showAll
-        ? tournaments
-        : tournaments.filter(t => {
+        ? all
+        : all.filter(t => {
             const max = getMaxPlayers(t.maxPlayers);
             const reg = Array.isArray(t.registeredPlayers) ? t.registeredPlayers.length : 0;
             return reg < max;
           }).slice(0, 3);
+
+      console.log(`🎯 Returning ${filtered.length} visible sit-n-go tournaments`);
 
       const enriched = filtered.map(t => {
         const rake = t.rakePercent ?? 0.10;
@@ -59,7 +57,7 @@ module.exports = function(io) {
     }
   });
 
-  // GET /api/sit-n-go/:id
+  // ✅ GET /api/sit-n-go/:id — fetch tournament by ID
   router.get('/:id', async (req, res) => {
     try {
       const tournament = await Tournament.findOne({ id: req.params.id });
@@ -71,7 +69,7 @@ module.exports = function(io) {
     }
   });
 
-  // POST /api/sit-n-go/register/:id
+  // ✅ POST /api/sit-n-go/register/:id — register player
   router.post('/register/:id', async (req, res) => {
     const { playerId } = req.body;
     const { id } = req.params;
@@ -146,7 +144,7 @@ module.exports = function(io) {
     }
   });
 
-  // POST /api/sit-n-go/clone/:id
+  // ✅ POST /api/sit-n-go/clone/:id — clone tournament
   router.post('/clone/:id', async (req, res) => {
     try {
       const original = await Tournament.findOne({ id: req.params.id });
@@ -181,15 +179,10 @@ module.exports = function(io) {
     }
   });
 
-  // POST /api/sit-n-go/recalculate-prizes
+  // ✅ POST /api/sit-n-go/recalculate-prizes — update prize pools
   router.post('/recalculate-prizes', async (req, res) => {
     try {
-      const tournaments = await Tournament.find({
-        type: 'sit-n-go',
-        status: 'scheduled',
-        startTime: null
-      });
-
+      const tournaments = await Tournament.find({ type: 'sit-n-go' });
       let updatedCount = 0;
 
       for (const t of tournaments) {
@@ -213,7 +206,7 @@ module.exports = function(io) {
     }
   });
 
-  // POST /api/sit-n-go/create-test
+  // ✅ POST /api/sit-n-go/create-test — inject test tournament
   router.post('/create-test', async (req, res) => {
     try {
       const testTournament = new Tournament({
@@ -241,6 +234,20 @@ module.exports = function(io) {
       res.status(201).json({ message: 'Test tournament created', tournament: testTournament });
     } catch (err) {
       console.error('❌ Test tournament creation error:', err.message);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+
+  // ✅ GET /api/sit-n-go/match/:matchId — fetch matchState
+  router.get('/match/:matchId', async (req, res) => {
+    const { matchId } = req.params;
+
+    try {
+      const match = await MatchState.findOne({ matchId });
+      if (!match) return res.status(404).json({ error: 'Match not found' });
+      res.status(200).json(match);
+    } catch (err) {
+      console.error(`❌ Failed to fetch match ${matchId}:`, err.message);
       res.status(500).json({ error: 'Server error' });
     }
   });

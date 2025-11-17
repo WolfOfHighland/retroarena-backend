@@ -6,14 +6,12 @@ const { saveMatchState, loadMatchStatesByTournament } = require('../utils/matchS
 module.exports = function(io) {
   const router = express.Router();
 
-  // GET /api/tournaments (Scheduled only)
+  // ✅ GET /api/tournaments — fetch scheduled tournaments
   router.get('/', async (_req, res) => {
     try {
       const tournaments = await Tournament.find({
-        $or: [
-          { type: 'scheduled' },
-          { startTime: { $ne: null } }
-        ]
+        type: 'scheduled',
+        status: 'scheduled'
       });
 
       console.log('🧪 Raw tournaments from DB:', tournaments.map(t => ({
@@ -32,8 +30,9 @@ module.exports = function(io) {
           : undefined;
         const registeredCount = Array.isArray(t.registeredPlayers) ? t.registeredPlayers.length : 0;
         const prizeAmount = t.prizeType === 'guaranteed'
-         ? t.prizeAmount ?? (maxPlayers ? netEntry * maxPlayers : 0)
-         : netEntry * registeredCount;
+          ? t.prizeAmount ?? (maxPlayers ? netEntry * maxPlayers : 0)
+          : netEntry * registeredCount;
+
         return {
           id: t.id || t._id.toString(),
           name: t.name,
@@ -59,80 +58,80 @@ module.exports = function(io) {
     }
   });
 
-  // POST /api/tournaments/create
-router.post('/create', async (req, res) => {
-  const { id, maxPlayers, rom, core, goalieMode, periodLength, players } = req.body;
+  // ✅ POST /api/tournaments/create — create and launch tournament
+  router.post('/create', async (req, res) => {
+    const { id, maxPlayers, rom, core, goalieMode, periodLength, players } = req.body;
 
-  console.log('[RRC] Incoming tournament payload:', JSON.stringify(req.body, null, 2));
+    console.log('[RRC] Incoming tournament payload:', JSON.stringify(req.body, null, 2));
 
-  if (!id || !Array.isArray(players) || players.length < 2) {
-    console.warn('⚠️ Invalid tournament payload');
-    return res.status(400).json({ error: 'Invalid tournament payload' });
-  }
-
-  try {
-    const tournament = new Tournament({
-      id,
-      name: id,
-      maxPlayers,
-      rom,
-      core,
-      goalieMode,
-      periodLength,
-      registeredPlayers: players.map(p => ({
-        id: p,
-        displayName: p,
-        isGuest: false
-      })),
-      status: 'scheduled',
-      type: 'scheduled',
-      game: 'NHL 95'
-    });
-
-    await tournament.save();
-    console.log('✅ Tournament created:', tournament);
-
-    if (maxPlayers && players.length === maxPlayers) {
-      const round = 1;
-      const bracket = generateBracket(players);
-
-      for (let index = 0; index < bracket.length; index++) {
-        const pair = bracket[index];
-        const matchId = `${id}-r${round}-m${index}`;
-        const matchState = {
-          ...createMatchState(matchId, pair, {
-            rom,
-            core,
-            goalieMode,
-            periodLength,
-            round,
-            matchIndex: index
-          }),
-          tournamentId: id
-        };
-
-        console.log(`🧪 Saving matchState for ${matchId}`);
-        saveMatchState(matchId, matchState);
-
-        pair.forEach(playerId => {
-          io.to(playerId).emit('matchStart', matchState);
-        });
-
-        console.log(`🎮 Emitted matchStart for ${matchId}`);
-      }
-
-      tournament.status = 'live';
-      await tournament.save();
+    if (!id || !Array.isArray(players) || players.length < 2) {
+      console.warn('⚠️ Invalid tournament payload');
+      return res.status(400).json({ error: 'Invalid tournament payload' });
     }
 
-    res.status(201).json({ message: 'Tournament created', tournament });
-  } catch (err) {
-    console.error('❌ Tournament creation error:', err.stack || err.message);
-    res.status(500).json({ error: 'Server error during tournament creation' });
-  }
-});
+    try {
+      const tournament = new Tournament({
+        id,
+        name: id,
+        maxPlayers,
+        rom,
+        core,
+        goalieMode,
+        periodLength,
+        registeredPlayers: players.map(p => ({
+          id: p,
+          displayName: p,
+          isGuest: false
+        })),
+        status: 'scheduled',
+        type: 'scheduled',
+        game: 'NHL 95'
+      });
 
-  // POST /api/tournaments/register/:tournamentId
+      await tournament.save();
+      console.log('✅ Tournament created:', tournament);
+
+      if (maxPlayers && players.length === maxPlayers) {
+        const round = 1;
+        const bracket = generateBracket(players);
+
+        for (let index = 0; index < bracket.length; index++) {
+          const pair = bracket[index];
+          const matchId = `${id}-r${round}-m${index}`;
+          const matchState = {
+            ...createMatchState(matchId, pair, {
+              rom,
+              core,
+              goalieMode,
+              periodLength,
+              round,
+              matchIndex: index
+            }),
+            tournamentId: id
+          };
+
+          console.log(`🧪 Saving matchState for ${matchId}`);
+          saveMatchState(matchId, matchState);
+
+          pair.forEach(playerId => {
+            io.to(playerId).emit('matchStart', matchState);
+          });
+
+          console.log(`🎮 Emitted matchStart for ${matchId}`);
+        }
+
+        tournament.status = 'live';
+        await tournament.save();
+      }
+
+      res.status(201).json({ message: 'Tournament created', tournament });
+    } catch (err) {
+      console.error('❌ Tournament creation error:', err.stack || err.message);
+      res.status(500).json({ error: 'Server error during tournament creation' });
+    }
+  });
+
+  // ✅ POST /api/tournaments/register/:tournamentId — join and trigger matchStart
   router.post('/register/:tournamentId', async (req, res) => {
     const { tournamentId } = req.params;
     const { playerId } = req.body;
@@ -149,7 +148,6 @@ router.post('/create', async (req, res) => {
       }
 
       const tournament = await Tournament.findOne({ id: tournamentId });
-
       if (!tournament) {
         console.warn(`⚠️ Tournament not found: ${tournamentId}`);
         return res.status(404).json({ error: 'Tournament not found' });
@@ -159,7 +157,10 @@ router.post('/create', async (req, res) => {
         tournament.registeredPlayers = [];
       }
 
-      if (tournament.registeredPlayers.includes(playerId)) {
+      const alreadyRegistered = tournament.registeredPlayers.some(p =>
+        typeof p === 'string' ? p === playerId : p.id === playerId
+      );
+      if (alreadyRegistered) {
         console.warn(`⚠️ Player already registered: ${playerId}`);
         return res.status(400).json({ error: 'Player already registered' });
       }
@@ -212,16 +213,13 @@ router.post('/create', async (req, res) => {
     }
   });
 
-  // GET /api/tournaments/:id/matches
+  // ✅ GET /api/tournaments/:id/matches — fetch all matchStates
   router.get('/:id/matches', async (req, res) => {
     const { id } = req.params;
 
     try {
       const matches = await loadMatchStatesByTournament(id);
-      if (!matches || matches.length === 0) {
-        return res.status(200).json([]);
-      }
-      res.status(200).json(matches);
+      res.status(200).json(matches || []);
     } catch (err) {
       console.error(`❌ Failed to load matches for ${id}:`, err.message);
       res.status(500).json({ error: 'Failed to load matches' });

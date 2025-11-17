@@ -22,7 +22,7 @@ const freerollTemplates = [
     registeredPlayers: [],
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
-    type: "sit-n-go",
+    type: "freeroll",
     status: "scheduled",
     periodLength: 5,
     rakePercent: 0.10,
@@ -41,7 +41,7 @@ const freerollTemplates = [
     registeredPlayers: [],
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
-    type: "sit-n-go",
+    type: "freeroll",
     status: "scheduled",
     periodLength: 5,
     rakePercent: 0.10,
@@ -60,7 +60,7 @@ const freerollTemplates = [
     registeredPlayers: [],
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
-    type: "sit-n-go",
+    type: "freeroll",
     status: "scheduled",
     periodLength: 5,
     rakePercent: 0.10,
@@ -68,6 +68,7 @@ const freerollTemplates = [
 ];
 
 async function seedFreerolls() {
+  console.log("🔗 Connected to:", process.env.MONGO_URI);
   try {
     await Tournament.insertMany(freerollTemplates);
     console.log("✅ Seeded Freeroll tournaments");
