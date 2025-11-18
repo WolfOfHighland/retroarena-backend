@@ -44,7 +44,7 @@ app.use('/api', (req, _res, next) => {
 });
 
 app.use('/api/match', require('./routes/match'));
-app.use('/api/sit-n-go', require('./routes/sit-n-go'));
+app.use('/api/sit-n-go', require('./routes/sit-n-go')(io));
 app.use('/api/sit-n-go', require('./routes/sit-n-go-join')(io));
 app.use('/api/tournaments', require('./routes/tournaments')(io));
 app.use('/api/tournaments', require('./routes/tournaments-join'));
