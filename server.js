@@ -102,6 +102,21 @@ io.on('connection', (socket) => {
     console.log(`📡 Socket ${socket.id} joining tournament room: ${room}`);
   });
 
+socket.on("playerJoinedTournament", async ({ tournamentId, playerId }) => {
+  const tournament = await Tournament.findOne({ id: tournamentId });
+  if (!tournament) return;
+
+  if (!tournament.registeredPlayers.includes(playerId)) {
+    tournament.registeredPlayers.push(playerId);
+    await tournament.save();
+  }
+
+  io.to(tournamentId).emit("tournamentUpdate", {
+    tournamentId,
+    registeredCount: tournament.registeredPlayers.length,
+  });
+});
+
   socket.on("matchResult", async ({ tournamentId, matchId, winnerId }) => {
     try {
       const tournament = await Tournament.findOne({ id: tournamentId });
