@@ -17,7 +17,6 @@ module.exports = function (io) {
       const tournament = await Tournament.findOne({ id });
       if (!tournament) return res.status(404).json({ error: "Tournament not found" });
 
-      // Normalize registeredPlayers to object format
       tournament.registeredPlayers = Array.isArray(tournament.registeredPlayers)
         ? tournament.registeredPlayers.map(p => (typeof p === "string" ? { id: p } : p))
         : [];
@@ -32,8 +31,16 @@ module.exports = function (io) {
       await tournament.save();
       console.log(`✅ Player ${playerId} registered for ${tournament.name}`);
 
-      // 🔁 Re-fetch to ensure fresh player count
       const updated = await Tournament.findOne({ id });
+      const registeredCount = updated.registeredPlayers.length;
+
+      // ✅ Emit tournamentUpdate to sync all clients
+      io.to(updated.id).emit("tournamentUpdate", {
+        tournamentId: updated.id,
+        registeredCount,
+      });
+      console.log(`📡 tournamentUpdate emitted for ${updated.id}: ${registeredCount}`);
+
       const unprocessed = updated.registeredPlayers.map(p => p.id);
       const matched = new Set();
       let bracketCount = 0;

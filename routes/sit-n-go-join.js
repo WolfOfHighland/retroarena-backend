@@ -58,7 +58,16 @@ module.exports = function (io) {
       console.log(`✅ Saved ${playerId} to tournament ${tournament.id}`);
 
       const updated = await Tournament.findOne({ id });
-      if (updated.registeredPlayers.length === updated.maxPlayers) {
+      const registeredCount = updated.registeredPlayers.length;
+
+      // ✅ Emit tournamentUpdate to sync all clients
+      io.to(updated.id).emit("tournamentUpdate", {
+        tournamentId: updated.id,
+        registeredCount,
+      });
+      console.log(`📡 tournamentUpdate emitted for ${updated.id}: ${registeredCount}`);
+
+      if (registeredCount === updated.maxPlayers) {
         const round = 1;
         const bracket = generateBracket(updated.registeredPlayers.map(p => p.id));
         const bootUrlBase = `https://www.retrorumblearena.com/Retroarch-Browser/index.html`;

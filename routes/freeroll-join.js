@@ -18,7 +18,6 @@ function buildMatchPayload(tournament) {
 module.exports = function (io) {
   const router = express.Router();
 
-  // ✅ Freeroll registration
   router.post("/freeroll/register/:id", async (req, res) => {
     const { playerId } = req.body;
     const { id } = req.params;
@@ -41,12 +40,20 @@ module.exports = function (io) {
       tournament.registeredPlayers.push({ id: playerId, displayName: playerId });
       await tournament.save();
 
-      // 🔁 Re-fetch to ensure fresh player count
       const updated = await Tournament.findOne({ id, entryFee: 0 });
+      const registeredCount = updated.registeredPlayers.length;
 
-      console.log(`🧪 Player count after join: ${updated.registeredPlayers.length}`);
+      console.log(`🧪 Player count after join: ${registeredCount}`);
 
-      if (updated.registeredPlayers.length >= 2) {
+      // ✅ Emit tournamentUpdate to all clients in this tournament room
+      io.to(updated.id).emit("tournamentUpdate", {
+        tournamentId: updated.id,
+        registeredCount,
+      });
+      console.log(`📡 tournamentUpdate emitted for ${updated.id}: ${registeredCount}`);
+
+      // ✅ If full, emit match boot
+      if (registeredCount >= 2) {
         const payload = buildMatchPayload(updated);
         const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${payload.core}&rom=${payload.rom}&matchId=${payload.matchId}&goalieMode=auto`;
 
@@ -63,33 +70,6 @@ module.exports = function (io) {
       res.status(200).json({ message: "Joined freeroll", tournament: updated });
     } catch (err) {
       console.error(`❌ Freeroll join error for ${id}:`, err.message);
-      res.status(500).json({ error: "Server error" });
-    }
-  });
-
-  // ✅ Manual matchStart emit
-  router.post("/emit-match", async (req, res) => {
-    const { tournamentId } = req.body;
-    try {
-      const tournament = await Tournament.findOne({ id: tournamentId, entryFee: 0 });
-      if (!tournament) return res.status(404).json({ error: "Tournament not found" });
-
-      if (!Array.isArray(tournament.registeredPlayers) || tournament.registeredPlayers.length < 2) {
-        return res.status(400).json({ error: "Tournament not full" });
-      }
-
-      const payload = buildMatchPayload(tournament);
-      const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${payload.core}&rom=${payload.rom}&matchId=${payload.matchId}&goalieMode=auto`;
-
-      io.to(tournament.id).emit("launchEmulator", { matchId: payload.matchId, launchUrl });
-      console.log(`📡 launchEmulator emitted to ${tournament.id}: ${launchUrl}`);
-
-      io.to(tournament.id).emit("matchStart", payload);
-      console.log(`📡 matchStart emitted to room ${tournament.id}`);
-
-      res.status(200).json({ message: "matchStart emitted", tournamentId });
-    } catch (err) {
-      console.error(`❌ Manual emit error for ${tournamentId}:`, err.message);
       res.status(500).json({ error: "Server error" });
     }
   });
