@@ -1,5 +1,4 @@
 const express = require("express");
-const router = express.Router();
 const Tournament = require("../models/Tournament");
 const MatchState = require("../models/MatchState");
 const User = require("../models/User");
@@ -8,39 +7,43 @@ const { generateBracket } = require("../utils/bracketManager");
 module.exports = function (io) {
   const router = express.Router();
 
-  router.post('/join/:id', async (req, res) => {
-    console.log('Entered /join/:id route');
+  router.post("/join/:id", async (req, res) => {
+    console.log("Entered /join/:id route");
     try {
       const { id } = req.params;
-      const { playerId, displayName = 'Guest' } = req.body;
+      const { playerId, displayName = "Guest" } = req.body;
 
       console.log(`🧪 Join request for ${id} from ${playerId}`);
-      if (!playerId) return res.status(400).json({ error: 'Missing playerId' });
+      if (!playerId) return res.status(400).json({ error: "Missing playerId" });
 
       const tournament = await Tournament.findOne({ id });
-      if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+      if (!tournament) return res.status(404).json({ error: "Tournament not found" });
 
       const user = await User.findOne({ username: playerId });
-      if (!user) return res.status(404).json({ error: 'User not found' });
+      if (!user) return res.status(404).json({ error: "User not found" });
 
       if (user.wallet < tournament.entryFee) {
-        console.warn(`[Join Blocked] ${playerId} has $${user.wallet}, needs $${tournament.entryFee}`);
-        return res.status(403).json({ error: 'Insufficient wallet balance' });
+        console.warn(
+          `[Join Blocked] ${playerId} has $${user.wallet}, needs $${tournament.entryFee}`
+        );
+        return res.status(403).json({ error: "Insufficient wallet balance" });
       }
 
       tournament.registeredPlayers = Array.isArray(tournament.registeredPlayers)
-        ? tournament.registeredPlayers.map(p => (typeof p === 'string' ? { id: p } : p))
+        ? tournament.registeredPlayers.map(p =>
+            typeof p === "string" ? { id: p } : p
+          )
         : [];
 
       const alreadyJoined = tournament.registeredPlayers.some(p => p.id === playerId);
       if (alreadyJoined) {
         console.log(`⚠️ Player ${playerId} already joined ${tournament.name}`);
-        return res.status(200).json({ message: 'Already joined' });
+        return res.status(200).json({ message: "Already joined", matchId: null });
       }
 
       if (tournament.registeredPlayers.length >= tournament.maxPlayers) {
         console.log(`🚫 Tournament ${tournament.id} is full`);
-        return res.status(403).json({ error: 'Tournament is full' });
+        return res.status(403).json({ error: "Tournament is full" });
       }
 
       user.wallet -= tournament.entryFee;
@@ -51,7 +54,7 @@ module.exports = function (io) {
         id: playerId,
         displayName,
         isGuest: true,
-        joinedAt: new Date()
+        joinedAt: new Date(),
       });
 
       await tournament.save();
@@ -60,12 +63,15 @@ module.exports = function (io) {
       const updated = await Tournament.findOne({ id });
       const registeredCount = updated.registeredPlayers.length;
 
-      // ✅ Emit tournamentUpdate to sync all clients
+      // Emit tournamentUpdate
       io.to(updated.id).emit("tournamentUpdate", {
         tournamentId: updated.id,
         registeredCount,
       });
+
       console.log(`📡 tournamentUpdate emitted for ${updated.id}: ${registeredCount}`);
+
+      let createdMatchId = null;
 
       if (registeredCount === updated.maxPlayers) {
         const round = 1;
@@ -84,12 +90,11 @@ module.exports = function (io) {
             matchIndex: index,
             rom: updated.rom || "NHL_95.bin",
             core: updated.core || "genesis_plus_gx",
-            goalieMode: updated.goalieMode,
-            periodLength: updated.periodLength
+            goalieMode: updated.goalieMode || "auto",
+            periodLength: updated.periodLength,
           };
 
           const matchDoc = new MatchState(matchState);
-          console.log(`🧪 Saving matchDoc:`, matchDoc);
           await matchDoc.save();
           console.log(`💾 Saved matchState for ${matchId}`);
 
@@ -97,22 +102,27 @@ module.exports = function (io) {
             core: matchState.core,
             rom: matchState.rom,
             matchId: matchState.matchId,
-            goalieMode: matchState.goalieMode || "auto"
+            goalieMode: matchState.goalieMode,
           });
 
           const launchUrl = `${bootUrlBase}?${params.toString()}`;
 
           io.to(updated.id).emit("launchEmulator", { matchId, launchUrl });
-          console.log(`📡 launchEmulator emitted to ${updated.id}: ${launchUrl}`);
-
           io.to(updated.id).emit("matchStart", matchState);
+
           console.log(`📡 matchStart emitted to room ${updated.id}:`, matchState);
+
+          // Capture one matchId to return
+          if (!createdMatchId) {
+            createdMatchId = matchId;
+          }
         }
 
-        const rakePercent = updated.rakePercent ?? 0.10;
+        const rakePercent = updated.rakePercent ?? 0.1;
         const netEntry = updated.entryFee * (1 - rakePercent);
         updated.prizeAmount = netEntry * updated.maxPlayers;
         await updated.save();
+
         console.log(`💰 Prize pool updated to $${updated.prizeAmount}`);
 
         const newTournament = new Tournament({
@@ -121,7 +131,7 @@ module.exports = function (io) {
           game: updated.game,
           goalieMode: updated.goalieMode,
           periodLength: updated.periodLength,
-          status: 'scheduled',
+          status: "scheduled",
           type: updated.type,
           registeredPlayers: [],
           entryFee: updated.entryFee,
@@ -131,20 +141,23 @@ module.exports = function (io) {
           elimination: updated.elimination,
           rom: updated.rom,
           core: updated.core,
-          rakePercent: updated.rakePercent
+          rakePercent: updated.rakePercent,
         });
 
         await newTournament.save();
-        console.log(`🧬 Auto-cloned new tournament: ${newTournament.id}`);
-        io.emit('tournamentCreated', newTournament);
+        io.emit("tournamentCreated", newTournament);
         io.emit("sitngoUpdated");
-        console.log(`🔔 sitngoUpdated emitted`);
       }
 
-      res.status(200).json({ message: 'Joined successfully' });
+      // ✅ Return matchId so frontend can redirect
+      res.status(200).json({
+        message: "Joined successfully",
+        matchId: createdMatchId,
+        tournamentId: updated.id,
+      });
     } catch (err) {
-      console.error('❌ Join error:', err.stack || err);
-      res.status(500).json({ error: 'Server error' });
+      console.error("❌ Join error:", err.stack || err);
+      res.status(500).json({ error: "Server error" });
     }
   });
 

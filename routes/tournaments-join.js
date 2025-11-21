@@ -12,21 +12,32 @@ module.exports = function (io) {
       const { id } = req.params;
       const { playerId } = req.body;
 
-      if (!playerId) return res.status(400).json({ error: "Missing playerId" });
-
-      const tournament = await Tournament.findOne({ id });
-      if (!tournament) return res.status(404).json({ error: "Tournament not found" });
-
-      tournament.registeredPlayers = Array.isArray(tournament.registeredPlayers)
-        ? tournament.registeredPlayers.map(p => (typeof p === "string" ? { id: p } : p))
-        : [];
-
-      const alreadyJoined = tournament.registeredPlayers.some(p => p.id === playerId);
-      if (alreadyJoined) {
-        console.log(`⚠️ Player ${playerId} already registered for ${tournament.name}`);
-        return res.status(200).json({ message: "Already registered" });
+      if (!playerId) {
+        return res.status(400).json({ error: "Missing playerId" });
       }
 
+      const tournament = await Tournament.findOne({ id });
+      if (!tournament) {
+        return res.status(404).json({ error: "Tournament not found" });
+      }
+
+      // Normalize registeredPlayers
+      tournament.registeredPlayers = Array.isArray(tournament.registeredPlayers)
+        ? tournament.registeredPlayers.map(p =>
+            typeof p === "string" ? { id: p } : p
+          )
+        : [];
+
+      // Prevent duplicate join
+      const alreadyJoined = tournament.registeredPlayers.some(
+        p => p.id === playerId
+      );
+      if (alreadyJoined) {
+        console.log(`⚠️ Player ${playerId} already registered for ${tournament.name}`);
+        return res.status(200).json({ message: "Already registered", matchId: null });
+      }
+
+      // Register player
       tournament.registeredPlayers.push({ id: playerId });
       await tournament.save();
       console.log(`✅ Player ${playerId} registered for ${tournament.name}`);
@@ -34,17 +45,19 @@ module.exports = function (io) {
       const updated = await Tournament.findOne({ id });
       const registeredCount = updated.registeredPlayers.length;
 
-      // ✅ Emit tournamentUpdate to sync all clients
+      // Emit tournament update
       io.to(updated.id).emit("tournamentUpdate", {
         tournamentId: updated.id,
         registeredCount,
       });
       console.log(`📡 tournamentUpdate emitted for ${updated.id}: ${registeredCount}`);
 
+      // Bracket + match creation
       const unprocessed = updated.registeredPlayers.map(p => p.id);
       const matched = new Set();
       let bracketCount = 0;
       const round = 1;
+      let createdMatchId = null;
 
       while (unprocessed.length >= BRACKET_SIZE) {
         const bracketPlayers = unprocessed.splice(0, BRACKET_SIZE);
@@ -65,7 +78,7 @@ module.exports = function (io) {
             matchIndex: index,
             rom: updated.rom || "NHL_95.bin",
             core: updated.core || "genesis_plus_gx",
-            goalieMode: updated.goalieMode,
+            goalieMode: updated.goalieMode || "auto",
             periodLength: updated.periodLength,
           };
 
@@ -77,18 +90,22 @@ module.exports = function (io) {
             core: matchState.core,
             rom: matchState.rom,
             matchId: matchState.matchId,
-            goalieMode: matchState.goalieMode || "auto",
+            goalieMode: matchState.goalieMode,
           });
 
           const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?${params.toString()}`;
 
           io.to(updated.id).emit("launchEmulator", { matchId, launchUrl });
-          console.log(`📡 launchEmulator emitted to ${updated.id}: ${launchUrl}`);
-
           io.to(updated.id).emit("matchStart", matchState);
+
           console.log(`📡 matchStart emitted to room ${updated.id}:`, matchState);
 
           pair.forEach(player => matched.add(player));
+
+          // Capture one matchId to return to frontend
+          if (!createdMatchId) {
+            createdMatchId = matchId;
+          }
         }
 
         io.emit("sitngoUpdated");
@@ -98,9 +115,14 @@ module.exports = function (io) {
       const remaining = updated.registeredPlayers.filter(p => !matched.has(p.id));
       console.log(`⏳ Waiting pool: ${remaining.length} players`);
 
-      res.status(200).json({ message: "Registered successfully" });
+      // ✅ Return matchId so frontend can redirect
+      res.status(200).json({
+        message: "Registered successfully",
+        matchId: createdMatchId,
+        tournamentId: updated.id,
+      });
     } catch (err) {
-      console.error("❌ Tournament register error:", err.message);
+      console.error("❌ Tournament join error:", err.message);
       res.status(500).json({ error: "Server error" });
     }
   });

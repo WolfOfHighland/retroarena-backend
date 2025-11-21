@@ -7,11 +7,14 @@ function buildMatchPayload(tournament) {
   return {
     matchId: tournament.id,
     tournamentId: tournament.id,
-    rom: bootUrl,
+    rom: tournament.rom || "NHL_95.bin",
     core: tournament.core || "genesis_plus_gx",
     players: tournament.registeredPlayers.map((p) =>
-      typeof p === "string" ? { id: p, name: p } : { id: p.id, name: p.displayName || p.id }
+      typeof p === "string"
+        ? { id: p, name: p }
+        : { id: p.id, name: p.displayName || p.id }
     ),
+    launchUrl: bootUrl,
   };
 }
 
@@ -45,29 +48,33 @@ module.exports = function (io) {
 
       console.log(`🧪 Player count after join: ${registeredCount}`);
 
-      // ✅ Emit tournamentUpdate to all clients in this tournament room
+      // Emit tournamentUpdate
       io.to(updated.id).emit("tournamentUpdate", {
         tournamentId: updated.id,
         registeredCount,
       });
-      console.log(`📡 tournamentUpdate emitted for ${updated.id}: ${registeredCount}`);
 
-      // ✅ If full, emit match boot
+      let createdMatchId = null;
+
+      // If full, emit match boot
       if (registeredCount >= 2) {
         const payload = buildMatchPayload(updated);
+        createdMatchId = payload.matchId;
+
         const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${payload.core}&rom=${payload.rom}&matchId=${payload.matchId}&goalieMode=auto`;
 
         io.to(updated.id).emit("launchEmulator", { matchId: payload.matchId, launchUrl });
-        console.log(`📡 launchEmulator emitted to ${updated.id}: ${launchUrl}`);
-
         io.to(updated.id).emit("matchStart", payload);
-        console.log(`📡 matchStart emitted to room ${updated.id}`);
 
         io.emit("sitngoUpdated");
-        console.log(`🔔 sitngoUpdated emitted`);
       }
 
-      res.status(200).json({ message: "Joined freeroll", tournament: updated });
+      // ✅ Return matchId so frontend can redirect
+      res.status(200).json({
+        message: "Joined freeroll",
+        tournament: updated,
+        matchId: createdMatchId,
+      });
     } catch (err) {
       console.error(`❌ Freeroll join error for ${id}:`, err.message);
       res.status(500).json({ error: "Server error" });
