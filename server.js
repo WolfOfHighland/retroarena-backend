@@ -7,9 +7,10 @@ const mongoose = require('mongoose');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const { createClient } = require('redis');
 const cors = require('cors');
-
+const freerollJoinRoutes = require("./routes/freeroll-join");
 const webhookRoutes = require('./routes/webhooks');
 const freerollRoutes = require('./routes/freeroll');
+
 const seedOpeningDay = require('./scripts/seedOpeningDay');
 const { saveMatchState, loadMatchState, setRedis } = require('./utils/matchState');
 const { emitTournamentSchedule, scheduleAllTournaments, watchSitNGoTables } = require('./scheduler/emitTournamentSchedule');
@@ -50,6 +51,7 @@ app.use('/api/tournaments', require('./routes/tournaments')(io));
 app.use('/api/tournaments', require('./routes/tournaments-join'));
 app.use('/api/cashier', require('./routes/cashier'));
 app.use('/api/freeroll', freerollRoutes(io));
+app.use("/api/freeroll", freerollJoinRoutes(io));
 app.use("/api/dev", freerollRoutes(io));
 app.use('/webhooks', webhookRoutes);
 console.log('✅ Webhook routes loaded');
