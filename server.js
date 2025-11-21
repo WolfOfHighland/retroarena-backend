@@ -242,6 +242,88 @@ app.post('/register-player', async (req, res) => {
     return res.status(500).json({ error: 'Failed to register player' });
   }
 });
+
+// ✅ Freeroll join route with match info response
+app.post("/api/freeroll/register/:id", async (req, res) => {
+  const matchId = req.params.id;
+  const { playerId } = req.body;
+
+  try {
+    const tournament = await Tournament.findOne({ id: matchId });
+    if (!tournament) {
+      return res.status(404).json({ error: "Tournament not found" });
+    }
+
+    // Add player if not already registered
+    if (!tournament.registeredPlayers.includes(playerId)) {
+      tournament.registeredPlayers.push(playerId);
+      await tournament.save();
+    }
+
+    // Respond with match info
+    return res.json({
+      matchId: tournament.id,
+      playersJoined: tournament.registeredPlayers.length,
+      maxPlayers: tournament.maxPlayers || null, // null if uncapped
+    });
+  } catch (err) {
+    console.error("❌ Freeroll join error:", err.message);
+    return res.status(500).json({ error: "Failed to join freeroll" });
+  }
+});
+
+app.post("/api/sit-n-go/join/:id", async (req, res) => {
+  const tableId = req.params.id;
+  const { playerId } = req.body;
+
+  try {
+    const table = await Tournament.findOne({ id: tableId });
+    if (!table) {
+      return res.status(404).json({ error: "Sit-n-Go table not found" });
+    }
+
+    if (!table.registeredPlayers.includes(playerId)) {
+      table.registeredPlayers.push(playerId);
+      await table.save();
+    }
+
+    return res.json({
+      matchId: table.id,
+      playersJoined: table.registeredPlayers.length,
+      maxPlayers: table.maxPlayers || null,
+    });
+  } catch (err) {
+    console.error("❌ Sit-n-Go join error:", err.message);
+    return res.status(500).json({ error: "Failed to join Sit-n-Go" });
+  }
+});
+
+app.post("/api/tournaments/join/:id", async (req, res) => {
+  const tournamentId = req.params.id;
+  const { playerId } = req.body;
+
+  try {
+    const tournament = await Tournament.findOne({ id: tournamentId });
+    if (!tournament) {
+      return res.status(404).json({ error: "Tournament not found" });
+    }
+
+    if (!tournament.registeredPlayers.includes(playerId)) {
+      tournament.registeredPlayers.push(playerId);
+      await tournament.save();
+    }
+
+    return res.json({
+      matchId: tournament.id,
+      playersJoined: tournament.registeredPlayers.length,
+      maxPlayers: tournament.maxPlayers || null,
+    });
+  } catch (err) {
+    console.error("❌ Tournament join error:", err.message);
+    return res.status(500).json({ error: "Failed to join tournament" });
+  }
+});
+
 app.post("/start-match", async (req, res) => {
   const { tournamentId, rom, core } = req.body;
 
