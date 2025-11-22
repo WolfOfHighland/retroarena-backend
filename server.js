@@ -97,6 +97,9 @@ io.on('connection', (socket) => {
   socket.on("join", (playerId) => {
   socket.join(playerId);
   console.log(`🧩 Socket ${socket.id} joined room: ${playerId}`);
+
+  // ✅ Tell the client what room they joined
+  socket.emit("joinedRoom", { roomId: playerId });
 });
 
   socket.on("joinTournament", (room) => {
