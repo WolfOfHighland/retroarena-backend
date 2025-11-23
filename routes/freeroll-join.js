@@ -31,7 +31,9 @@ module.exports = function (io) {
 
     try {
       const tournament = await Tournament.findOne({ id, entryFee: 0 });
-      if (!tournament) return res.status(404).json({ error: "Freeroll not found" });
+      if (!tournament) {
+        return res.status(404).json({ error: "Freeroll not found" });
+      }
 
       const alreadyJoined = tournament.registeredPlayers.some(
         (p) => (typeof p === "string" ? p === playerId : p.id === playerId)
@@ -53,6 +55,7 @@ module.exports = function (io) {
       io.to(updated.id).emit("tournamentUpdate", {
         tournamentId: updated.id,
         registeredCount,
+        maxPlayers,
       });
 
       let createdMatchId = null;
@@ -81,7 +84,7 @@ module.exports = function (io) {
       // ✅ Return matchId so frontend can redirect
       res.status(200).json({
         message: "Joined freeroll",
-        tournament: updated,
+        tournamentId: updated.id,
         matchId: createdMatchId, // null until pool fills
         playersJoined: registeredCount,
         maxPlayers,

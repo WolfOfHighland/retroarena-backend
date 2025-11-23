@@ -39,7 +39,13 @@ module.exports = function (io) {
       const alreadyJoined = tournament.registeredPlayers.some(p => p.id === playerId);
       if (alreadyJoined) {
         console.log(`⚠️ Player ${playerId} already joined ${tournament.name}`);
-        return res.status(200).json({ message: "Already joined", matchId: null });
+        return res.status(200).json({
+          message: "Already joined",
+          matchId: null,
+          tournamentId: tournament.id,
+          playersJoined: tournament.registeredPlayers.length,
+          maxPlayers: tournament.maxPlayers || 2,
+        });
       }
 
       if (tournament.registeredPlayers.length >= tournament.maxPlayers) {
@@ -65,19 +71,21 @@ module.exports = function (io) {
 
       const updated = await Tournament.findOne({ id });
       const registeredCount = updated.registeredPlayers.length;
+      const maxPlayers = updated.maxPlayers || 2;
 
       // Emit tournamentUpdate
       io.to(updated.id).emit("tournamentUpdate", {
         tournamentId: updated.id,
         registeredCount,
+        maxPlayers,
       });
 
-      console.log(`📡 tournamentUpdate emitted for ${updated.id}: ${registeredCount}`);
+      console.log(`📡 tournamentUpdate emitted for ${updated.id}: ${registeredCount}/${maxPlayers}`);
 
       let createdMatchId = null;
 
       // ✅ Auto-start when pool fills
-      if (registeredCount >= updated.maxPlayers) {
+      if (registeredCount >= maxPlayers) {
         const round = 1;
         const bracket = generateBracket(updated.registeredPlayers.map(p => p.id));
         const bootUrlBase = `https://www.retrorumblearena.com/Retroarch-Browser/index.html`;
@@ -124,7 +132,7 @@ module.exports = function (io) {
         // Update prize pool
         const rakePercent = updated.rakePercent ?? 0.1;
         const netEntry = updated.entryFee * (1 - rakePercent);
-        updated.prizeAmount = netEntry * updated.maxPlayers;
+        updated.prizeAmount = netEntry * maxPlayers;
 
         // ✅ Flip tournament state so frontend sees it as started
         updated.status = "live";
@@ -164,6 +172,8 @@ module.exports = function (io) {
         message: "Joined successfully",
         matchId: createdMatchId, // null until pool fills
         tournamentId: updated.id,
+        playersJoined: registeredCount,
+        maxPlayers,
       });
     } catch (err) {
       console.error("❌ Join error:", err.stack || err);

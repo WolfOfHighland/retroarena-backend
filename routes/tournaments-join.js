@@ -30,7 +30,13 @@ module.exports = function (io) {
       const alreadyJoined = tournament.registeredPlayers.some(p => p.id === playerId);
       if (alreadyJoined) {
         console.log(`⚠️ Player ${playerId} already registered for ${tournament.name}`);
-        return res.status(200).json({ message: "Already registered", matchId: null });
+        return res.status(200).json({
+          message: "Already registered",
+          matchId: null,
+          tournamentId: tournament.id,
+          playersJoined: tournament.registeredPlayers.length,
+          maxPlayers: tournament.maxPlayers || 2,
+        });
       }
 
       // Register player
@@ -40,14 +46,15 @@ module.exports = function (io) {
 
       const updated = await Tournament.findOne({ id });
       const registeredCount = updated.registeredPlayers.length;
-      const bracketSize = updated.maxPlayers || 2; // use tournament maxPlayers, default to 2
+      const maxPlayers = updated.maxPlayers || 2; // default to 2 if not set
 
       // Emit tournament update
       io.to(updated.id).emit("tournamentUpdate", {
         tournamentId: updated.id,
         registeredCount,
+        maxPlayers,
       });
-      console.log(`📡 tournamentUpdate emitted for ${updated.id}: ${registeredCount}/${bracketSize}`);
+      console.log(`📡 tournamentUpdate emitted for ${updated.id}: ${registeredCount}/${maxPlayers}`);
 
       // Bracket + match creation
       const unprocessed = updated.registeredPlayers.map(p => p.id);
@@ -56,8 +63,8 @@ module.exports = function (io) {
       const round = 1;
       let createdMatchId = null;
 
-      while (unprocessed.length >= bracketSize) {
-        const bracketPlayers = unprocessed.splice(0, bracketSize);
+      while (unprocessed.length >= maxPlayers) {
+        const bracketPlayers = unprocessed.splice(0, maxPlayers);
         bracketCount++;
 
         console.log(`🎯 Creating bracket ${bracketCount} with players:`, bracketPlayers);
@@ -124,6 +131,8 @@ module.exports = function (io) {
         message: "Registered successfully",
         matchId: createdMatchId, // null until a bracket fills
         tournamentId: updated.id,
+        playersJoined: registeredCount,
+        maxPlayers,
       });
     } catch (err) {
       console.error("❌ Tournament join error:", err.message);
