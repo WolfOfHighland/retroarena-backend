@@ -29,6 +29,7 @@ module.exports = function (io) {
         return res.status(403).json({ error: "Insufficient wallet balance" });
       }
 
+      // Normalize registeredPlayers
       tournament.registeredPlayers = Array.isArray(tournament.registeredPlayers)
         ? tournament.registeredPlayers.map(p =>
             typeof p === "string" ? { id: p } : p
@@ -46,10 +47,12 @@ module.exports = function (io) {
         return res.status(403).json({ error: "Tournament is full" });
       }
 
+      // Deduct entry fee
       user.wallet -= tournament.entryFee;
       await user.save();
       console.log(`💸 Deducted $${tournament.entryFee} from ${playerId}`);
 
+      // Register player
       tournament.registeredPlayers.push({
         id: playerId,
         displayName,
@@ -73,8 +76,8 @@ module.exports = function (io) {
 
       let createdMatchId = null;
 
-      // ✅ Only create matches when pool is full
-      if (registeredCount === updated.maxPlayers) {
+      // ✅ Auto-start when pool fills
+      if (registeredCount >= updated.maxPlayers) {
         const round = 1;
         const bracket = generateBracket(updated.registeredPlayers.map(p => p.id));
         const bootUrlBase = `https://www.retrorumblearena.com/Retroarch-Browser/index.html`;
@@ -113,12 +116,12 @@ module.exports = function (io) {
 
           console.log(`📡 matchStart emitted to room ${updated.id}:`, matchState);
 
-          // Capture one matchId to return
           if (!createdMatchId) {
             createdMatchId = matchId;
           }
         }
 
+        // Update prize pool
         const rakePercent = updated.rakePercent ?? 0.1;
         const netEntry = updated.entryFee * (1 - rakePercent);
         updated.prizeAmount = netEntry * updated.maxPlayers;
@@ -126,6 +129,7 @@ module.exports = function (io) {
 
         console.log(`💰 Prize pool updated to $${updated.prizeAmount}`);
 
+        // Clone tournament for next round
         const newTournament = new Tournament({
           id: `${updated.id}-clone-${Date.now()}`,
           name: updated.name,

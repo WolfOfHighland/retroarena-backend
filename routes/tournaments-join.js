@@ -4,8 +4,6 @@ const Tournament = require("../models/Tournament");
 const MatchState = require("../models/MatchState");
 const { generateBracket } = require("../utils/bracketManager");
 
-const BRACKET_SIZE = 8;
-
 module.exports = function (io) {
   router.post("/join/:id", async (req, res) => {
     try {
@@ -42,13 +40,14 @@ module.exports = function (io) {
 
       const updated = await Tournament.findOne({ id });
       const registeredCount = updated.registeredPlayers.length;
+      const bracketSize = updated.maxPlayers || 2; // use tournament maxPlayers, default to 2
 
       // Emit tournament update
       io.to(updated.id).emit("tournamentUpdate", {
         tournamentId: updated.id,
         registeredCount,
       });
-      console.log(`📡 tournamentUpdate emitted for ${updated.id}: ${registeredCount}`);
+      console.log(`📡 tournamentUpdate emitted for ${updated.id}: ${registeredCount}/${bracketSize}`);
 
       // Bracket + match creation
       const unprocessed = updated.registeredPlayers.map(p => p.id);
@@ -57,8 +56,8 @@ module.exports = function (io) {
       const round = 1;
       let createdMatchId = null;
 
-      while (unprocessed.length >= BRACKET_SIZE) {
-        const bracketPlayers = unprocessed.splice(0, BRACKET_SIZE);
+      while (unprocessed.length >= bracketSize) {
+        const bracketPlayers = unprocessed.splice(0, bracketSize);
         bracketCount++;
 
         console.log(`🎯 Creating bracket ${bracketCount} with players:`, bracketPlayers);

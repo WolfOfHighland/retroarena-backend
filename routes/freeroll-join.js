@@ -33,8 +33,8 @@ module.exports = function (io) {
       const tournament = await Tournament.findOne({ id, entryFee: 0 });
       if (!tournament) return res.status(404).json({ error: "Freeroll not found" });
 
-      const alreadyJoined = tournament.registeredPlayers.some((p) =>
-        typeof p === "string" ? p === playerId : p.id === playerId
+      const alreadyJoined = tournament.registeredPlayers.some(
+        (p) => (typeof p === "string" ? p === playerId : p.id === playerId)
       );
       if (alreadyJoined) {
         return res.status(400).json({ error: "Already registered" });
@@ -45,8 +45,9 @@ module.exports = function (io) {
 
       const updated = await Tournament.findOne({ id, entryFee: 0 });
       const registeredCount = updated.registeredPlayers.length;
+      const maxPlayers = updated.maxPlayers || 2; // default to 2 if not set
 
-      console.log(`🧪 Player count after join: ${registeredCount}`);
+      console.log(`🧪 Player count after join: ${registeredCount}/${maxPlayers}`);
 
       // Emit tournamentUpdate
       io.to(updated.id).emit("tournamentUpdate", {
@@ -56,8 +57,8 @@ module.exports = function (io) {
 
       let createdMatchId = null;
 
-      // ✅ If full, create a unique matchId and emit match boot
-      if (updated.maxPlayers && registeredCount >= updated.maxPlayers) {
+      // ✅ Auto-start when pool fills
+      if (registeredCount >= maxPlayers) {
         createdMatchId = `${updated.id}-${Date.now()}`;
         const payload = buildMatchPayload(updated, createdMatchId);
 
@@ -76,7 +77,7 @@ module.exports = function (io) {
         tournament: updated,
         matchId: createdMatchId, // null until pool fills
         playersJoined: registeredCount,
-        maxPlayers: updated.maxPlayers || null,
+        maxPlayers,
       });
     } catch (err) {
       console.error(`❌ Freeroll join error for ${id}:`, err.message);
