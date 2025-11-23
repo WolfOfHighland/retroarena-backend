@@ -246,13 +246,13 @@ app.post('/register-player', async (req, res) => {
   }
 });
 
-// ✅ Freeroll join route with match info response
+// ✅ Freeroll join route with matchmaker logic
 app.post("/api/freeroll/register/:id", async (req, res) => {
-  const matchId = req.params.id;
+  const tournamentId = req.params.id;
   const { playerId } = req.body;
 
   try {
-    const tournament = await Tournament.findOne({ id: matchId });
+    const tournament = await Tournament.findOne({ id: tournamentId });
     if (!tournament) {
       return res.status(404).json({ error: "Tournament not found" });
     }
@@ -263,18 +263,30 @@ app.post("/api/freeroll/register/:id", async (req, res) => {
       await tournament.save();
     }
 
-    // Respond with match info
-    return res.json({
-      matchId: tournament.id,
-      playersJoined: tournament.registeredPlayers.length,
-      maxPlayers: tournament.maxPlayers || null, // null if uncapped
-    });
+    const playersJoined = tournament.registeredPlayers.length;
+    const maxPlayers = tournament.maxPlayers || null;
+
+    // ✅ Only return matchId once enough players have joined
+    if (maxPlayers && playersJoined >= maxPlayers) {
+      return res.json({
+        matchId: tournament.id,
+        playersJoined,
+        maxPlayers,
+      });
+    } else {
+      return res.json({
+        matchId: null,
+        playersJoined,
+        maxPlayers,
+      });
+    }
   } catch (err) {
     console.error("❌ Freeroll join error:", err.message);
     return res.status(500).json({ error: "Failed to join freeroll" });
   }
 });
 
+// ✅ Sit-n-Go join route with matchmaker logic
 app.post("/api/sit-n-go/join/:id", async (req, res) => {
   const tableId = req.params.id;
   const { playerId } = req.body;
@@ -290,17 +302,29 @@ app.post("/api/sit-n-go/join/:id", async (req, res) => {
       await table.save();
     }
 
-    return res.json({
-      matchId: table.id,
-      playersJoined: table.registeredPlayers.length,
-      maxPlayers: table.maxPlayers || null,
-    });
+    const playersJoined = table.registeredPlayers.length;
+    const maxPlayers = table.maxPlayers || null;
+
+    if (maxPlayers && playersJoined >= maxPlayers) {
+      return res.json({
+        matchId: table.id,
+        playersJoined,
+        maxPlayers,
+      });
+    } else {
+      return res.json({
+        matchId: null,
+        playersJoined,
+        maxPlayers,
+      });
+    }
   } catch (err) {
     console.error("❌ Sit-n-Go join error:", err.message);
     return res.status(500).json({ error: "Failed to join Sit-n-Go" });
   }
 });
 
+// ✅ Scheduled tournament join route with matchmaker logic
 app.post("/api/tournaments/join/:id", async (req, res) => {
   const tournamentId = req.params.id;
   const { playerId } = req.body;
@@ -316,17 +340,29 @@ app.post("/api/tournaments/join/:id", async (req, res) => {
       await tournament.save();
     }
 
-    return res.json({
-      matchId: tournament.id,
-      playersJoined: tournament.registeredPlayers.length,
-      maxPlayers: tournament.maxPlayers || null,
-    });
+    const playersJoined = tournament.registeredPlayers.length;
+    const maxPlayers = tournament.maxPlayers || null;
+
+    if (maxPlayers && playersJoined >= maxPlayers) {
+      return res.json({
+        matchId: tournament.id,
+        playersJoined,
+        maxPlayers,
+      });
+    } else {
+      return res.json({
+        matchId: null,
+        playersJoined,
+        maxPlayers,
+      });
+    }
   } catch (err) {
     console.error("❌ Tournament join error:", err.message);
     return res.status(500).json({ error: "Failed to join tournament" });
   }
 });
 
+// ✅ Start match route (unchanged except formatting)
 app.post("/start-match", async (req, res) => {
   const { tournamentId, rom, core } = req.body;
 
@@ -352,18 +388,17 @@ app.post("/start-match", async (req, res) => {
     await saveMatchState(tournamentId, matchState);
 
     // ✅ Delay emit to ensure sockets join rooms
-setTimeout(() => {
-  for (const playerId of tournament.registeredPlayers || []) {
-    const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${core}&rom=${rom}&matchId=${tournamentId}`;
-    console.log(`🧪 Preparing to emit launchEmulator to ${playerId}`);
-    io.to(playerId).emit("launchEmulator", { matchId: tournamentId, launchUrl });
-    console.log(`📡 Emitted launchEmulator to ${playerId}: ${launchUrl}`);
-  }
+    setTimeout(() => {
+      for (const playerId of tournament.registeredPlayers || []) {
+        const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${core}&rom=${rom}&matchId=${tournamentId}`;
+        console.log(`🧪 Preparing to emit launchEmulator to ${playerId}`);
+        io.to(playerId).emit("launchEmulator", { matchId: tournamentId, launchUrl });
+        console.log(`📡 Emitted launchEmulator to ${playerId}: ${launchUrl}`);
+      }
 
-  io.to(tournamentId).emit("matchStart", matchState);
-  console.log(`📡 Emitted matchStart to room ${tournamentId}`);
-}, 1000);
-
+      io.to(tournamentId).emit("matchStart", matchState);
+      console.log(`📡 Emitted matchStart to room ${tournamentId}`);
+    }, 1000);
 
     return res.status(200).json({
       ok: true,
@@ -375,6 +410,8 @@ setTimeout(() => {
     return res.status(500).json({ error: "Failed to start match" });
   }
 });
+
+// ✅ Route logging
 app._router.stack
   .filter(r => r.route)
   .forEach(r => {
