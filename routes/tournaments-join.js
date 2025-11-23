@@ -29,9 +29,7 @@ module.exports = function (io) {
         : [];
 
       // Prevent duplicate join
-      const alreadyJoined = tournament.registeredPlayers.some(
-        p => p.id === playerId
-      );
+      const alreadyJoined = tournament.registeredPlayers.some(p => p.id === playerId);
       if (alreadyJoined) {
         console.log(`⚠️ Player ${playerId} already registered for ${tournament.name}`);
         return res.status(200).json({ message: "Already registered", matchId: null });
@@ -68,7 +66,7 @@ module.exports = function (io) {
 
         for (let index = 0; index < matches.length; index++) {
           const pair = matches[index];
-          const matchId = `${updated.id}-bracket${bracketCount}-r${round}-m${index}`;
+          const matchId = `${updated.id}-bracket${bracketCount}-r${round}-m${index}-${Date.now()}`;
 
           const matchState = {
             matchId,
@@ -118,7 +116,7 @@ module.exports = function (io) {
       // ✅ Return matchId so frontend can redirect
       res.status(200).json({
         message: "Registered successfully",
-        matchId: createdMatchId,
+        matchId: createdMatchId, // null until a bracket fills
         tournamentId: updated.id,
       });
     } catch (err) {

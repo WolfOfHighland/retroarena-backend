@@ -73,6 +73,7 @@ module.exports = function (io) {
 
       let createdMatchId = null;
 
+      // ✅ Only create matches when pool is full
       if (registeredCount === updated.maxPlayers) {
         const round = 1;
         const bracket = generateBracket(updated.registeredPlayers.map(p => p.id));
@@ -80,7 +81,7 @@ module.exports = function (io) {
 
         for (let index = 0; index < bracket.length; index++) {
           const pair = bracket[index];
-          const matchId = `${updated.id}-r${round}-m${index}`;
+          const matchId = `${updated.id}-r${round}-m${index}-${Date.now()}`;
 
           const matchState = {
             matchId,
@@ -152,7 +153,7 @@ module.exports = function (io) {
       // ✅ Return matchId so frontend can redirect
       res.status(200).json({
         message: "Joined successfully",
-        matchId: createdMatchId,
+        matchId: createdMatchId, // null until pool fills
         tournamentId: updated.id,
       });
     } catch (err) {

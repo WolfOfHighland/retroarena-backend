@@ -1,11 +1,11 @@
 const express = require("express");
 const Tournament = require("../models/Tournament");
 
-function buildMatchPayload(tournament) {
-  const bootUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${tournament.core || "genesis_plus_gx"}&rom=${tournament.rom || "NHL_95.bin"}`;
+function buildMatchPayload(tournament, matchId) {
+  const bootUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${tournament.core || "genesis_plus_gx"}&rom=${tournament.rom || "NHL_95.bin"}&matchId=${matchId}&goalieMode=auto`;
 
   return {
-    matchId: tournament.id,
+    matchId,
     tournamentId: tournament.id,
     rom: tournament.rom || "NHL_95.bin",
     core: tournament.core || "genesis_plus_gx",
@@ -56,24 +56,27 @@ module.exports = function (io) {
 
       let createdMatchId = null;
 
-      // If full, emit match boot
-      if (registeredCount >= 2) {
-        const payload = buildMatchPayload(updated);
-        createdMatchId = payload.matchId;
+      // ✅ If full, create a unique matchId and emit match boot
+      if (updated.maxPlayers && registeredCount >= updated.maxPlayers) {
+        createdMatchId = `${updated.id}-${Date.now()}`;
+        const payload = buildMatchPayload(updated, createdMatchId);
 
-        const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${payload.core}&rom=${payload.rom}&matchId=${payload.matchId}&goalieMode=auto`;
-
-        io.to(updated.id).emit("launchEmulator", { matchId: payload.matchId, launchUrl });
+        io.to(updated.id).emit("launchEmulator", {
+          matchId: payload.matchId,
+          launchUrl: payload.launchUrl,
+        });
         io.to(updated.id).emit("matchStart", payload);
 
-        io.emit("sitngoUpdated");
+        console.log(`📡 Emitted matchStart for ${createdMatchId}`);
       }
 
       // ✅ Return matchId so frontend can redirect
       res.status(200).json({
         message: "Joined freeroll",
         tournament: updated,
-        matchId: createdMatchId,
+        matchId: createdMatchId, // null until pool fills
+        playersJoined: registeredCount,
+        maxPlayers: updated.maxPlayers || null,
       });
     } catch (err) {
       console.error(`❌ Freeroll join error for ${id}:`, err.message);
