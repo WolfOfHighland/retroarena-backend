@@ -69,6 +69,13 @@ module.exports = function (io) {
         io.to(updated.id).emit("matchStart", payload);
 
         console.log(`📡 Emitted matchStart for ${createdMatchId}`);
+
+        // ✅ Flip tournament state so frontend sees it as started
+        updated.status = "live";
+        updated.isLive = true;
+        updated.hasStarted = true;
+        await updated.save();
+        console.log(`🚀 Tournament ${updated.id} marked as started`);
       }
 
       // ✅ Return matchId so frontend can redirect

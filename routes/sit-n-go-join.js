@@ -125,9 +125,14 @@ module.exports = function (io) {
         const rakePercent = updated.rakePercent ?? 0.1;
         const netEntry = updated.entryFee * (1 - rakePercent);
         updated.prizeAmount = netEntry * updated.maxPlayers;
-        await updated.save();
 
-        console.log(`💰 Prize pool updated to $${updated.prizeAmount}`);
+        // ✅ Flip tournament state so frontend sees it as started
+        updated.status = "live";
+        updated.isLive = true;
+        updated.hasStarted = true;
+
+        await updated.save();
+        console.log(`🚀 Tournament ${updated.id} marked as started with prize pool $${updated.prizeAmount}`);
 
         // Clone tournament for next round
         const newTournament = new Tournament({

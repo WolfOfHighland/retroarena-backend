@@ -105,6 +105,13 @@ module.exports = function (io) {
           }
         }
 
+        // ✅ Flip tournament state so frontend sees it as started
+        updated.status = "live";
+        updated.isLive = true;
+        updated.hasStarted = true;
+        await updated.save();
+        console.log(`🚀 Tournament ${updated.id} marked as started`);
+
         io.emit("sitngoUpdated");
         console.log(`🔔 sitngoUpdated emitted`);
       }
