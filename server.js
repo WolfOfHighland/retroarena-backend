@@ -11,6 +11,7 @@ const freerollJoinRoutes = require("./routes/freeroll-join");
 const webhookRoutes = require('./routes/webhooks');
 const freerollRoutes = require('./routes/freeroll');
 
+
 const seedOpeningDay = require('./scripts/seedOpeningDay');
 const { saveMatchState, loadMatchState, setRedis } = require('./utils/matchState');
 const { emitTournamentSchedule, scheduleAllTournaments, watchSitNGoTables } = require('./scheduler/emitTournamentSchedule');
@@ -38,6 +39,8 @@ const io = new Server(server, {
   },
 });
 module.exports.io = io;
+const testJoinRoutes = require("./routes/testJoin")(io);
+
 
 app.use('/api', (req, _res, next) => {
   console.log(`➡️ API ${req.method} ${req.originalUrl}`);
@@ -53,6 +56,7 @@ app.use('/api/cashier', require('./routes/cashier'));
 app.use('/api/freeroll', freerollRoutes(io));
 app.use("/api/freeroll", freerollJoinRoutes(io));
 app.use("/api/dev", freerollRoutes(io));
+app.use("/api", testJoinRoutes);
 app.use('/webhooks', webhookRoutes);
 console.log('✅ Webhook routes loaded');
 
