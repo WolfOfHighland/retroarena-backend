@@ -11,8 +11,9 @@ const freerollJoinRoutes = require("./routes/freeroll-join");
 const webhookRoutes = require('./routes/webhooks');
 const freerollRoutes = require('./routes/freeroll');
 
-
 const seedOpeningDay = require('./scripts/seedOpeningDay');
+const seedSitNGo = require('./scripts/seedSitNGo');
+const seedFreerolls = require('./scripts/freerollSeed');
 const { saveMatchState, loadMatchState, setRedis } = require('./utils/matchState');
 const { emitTournamentSchedule, scheduleAllTournaments, watchSitNGoTables } = require('./scheduler/emitTournamentSchedule');
 
@@ -20,26 +21,37 @@ const Player = require('./models/Player');
 const Tournament = require('./models/Tournament');
 
 const app = express();
+
+// ✅ Add CORS middleware here
 app.use(cors({
   origin: [
     "https://retrorumblearena.com",
     "https://www.retrorumblearena.com",
-    /\.vercel\.app$/,
-    "http://localhost:3000"
+    /\.vercel\.app$/,          // allow all Vercel preview domains
+    "http://localhost:3000"    // local dev
   ],
+  methods: ["GET", "POST", "OPTIONS"],
   credentials: true,
 }));
+
 app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST'],
+    origin: [
+      "https://retrorumblearena.com",
+      "https://www.retrorumblearena.com",
+      /\.vercel\.app$/,
+      "http://localhost:3000"
+    ],
+    methods: ["GET", "POST"],
   },
 });
 module.exports.io = io;
 const testJoinRoutes = require("./routes/testJoin")(io);
+
+// … rest of your routes …
 
 
 app.use('/api', (req, _res, next) => {
@@ -191,12 +203,23 @@ if (process.env.MONGO_URI) {
   }).then(async () => {
     console.log('✅ Connected to MongoDB');
 
+    // Clean up any past tournaments that never filled
     await Tournament.deleteMany({
       startTime: { $lt: new Date() },
       registeredPlayers: []
     });
 
-    await seedOpeningDay();
+    // Seed scripts
+    try {
+      await seedOpeningDay();
+      await seedSitNGo();
+      await seedFreerolls();
+      console.log('✅ Seeding complete');
+    } catch (err) {
+      console.error('⚠️ Seeding error:', err);
+    }
+
+    // Kick off schedulers
     emitTournamentSchedule(io);
     watchSitNGoTables(io);
   }).catch((err) => {
