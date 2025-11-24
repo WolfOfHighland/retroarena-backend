@@ -71,9 +71,8 @@ async function seedSitNGo() {
     console.log("✅ Seeded Sit‑n‑Go templates");
   } catch (err) {
     console.error("❌ Error seeding Sit‑n‑Go:", err);
-  } finally {
-    mongoose.disconnect();
   }
 }
 
-seedSitNGo();
+// 👉 Export the function instead of running it
+module.exports = seedSitNGo;

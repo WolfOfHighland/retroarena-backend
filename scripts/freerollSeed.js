@@ -2,11 +2,6 @@ require("dotenv").config(); // ✅ Load .env variables
 const mongoose = require("mongoose");
 const Tournament = require("../models/Tournament");
 
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
-
 const freerollTemplates = [
   {
     id: `freeroll-auto-2-${Date.now()}`,
@@ -68,15 +63,25 @@ const freerollTemplates = [
 ];
 
 async function seedFreerolls() {
-  console.log("🔗 Connected to:", process.env.MONGO_URI);
   try {
     await Tournament.insertMany(freerollTemplates);
     console.log("✅ Seeded Freeroll tournaments");
   } catch (err) {
     console.error("❌ Error seeding Freerolls:", err);
-  } finally {
-    mongoose.disconnect();
   }
 }
 
-seedFreerolls();
+// 👉 Export the function instead of running it immediately
+module.exports = seedFreerolls;
+
+// Optional: allow standalone execution
+if (require.main === module) {
+  mongoose.connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    dbName: "retro_rumble",
+  }).then(async () => {
+    await seedFreerolls();
+    mongoose.disconnect();
+  });
+}
