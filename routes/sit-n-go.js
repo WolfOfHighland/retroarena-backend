@@ -101,7 +101,7 @@ module.exports = function(io) {
         const round = 1;
         const bracket = generateBracket(tournament.registeredPlayers);
 
-        bracket.forEach((pair, index) => {
+        bracket.forEach(async (pair, index) => {
           const matchId = `${tournament.id}-r${round}-m${index}`;
           const matchState = {
             ...createMatchState(matchId, pair, {
@@ -112,7 +112,7 @@ module.exports = function(io) {
               round,
               matchIndex: index
             }),
-            tournamentId: tournament.id
+            tournamentId: tournament.id   // ✅ include tournamentId
           };
 
           const matchDoc = new MatchState({
@@ -127,10 +127,16 @@ module.exports = function(io) {
             periodLength: tournament.periodLength
           });
 
-          matchDoc.save();
+          await matchDoc.save();
+
           pair.forEach(player => {
             io.to(player).emit('matchStart', matchState);
           });
+
+          // ✅ also emit to tournament room so lobby UI can react
+          io.to(tournament.id).emit('matchStart', matchState);
+
+          console.log(`🎮 matchStart emitted for match ${matchId} in tournament ${tournament.id}`);
         });
 
         tournament.status = 'live';
@@ -232,7 +238,7 @@ module.exports = function(io) {
       await testTournament.save();
       console.log(`🧪 Test tournament created: ${testTournament.id}`);
       res.status(201).json({ message: 'Test tournament created', tournament: testTournament });
-    } catch (err) {
+       } catch (err) {
       console.error('❌ Test tournament creation error:', err.message);
       res.status(500).json({ error: 'Server error' });
     }
@@ -254,3 +260,4 @@ module.exports = function(io) {
 
   return router;
 };
+ 

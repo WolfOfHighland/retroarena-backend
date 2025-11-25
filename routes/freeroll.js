@@ -14,22 +14,22 @@ module.exports = function (io) {
 
   // ✅ GET /freeroll — fetch scheduled freeroll tournaments
   router.get('/', async (req, res) => {
-  try {
-    const all = await Tournament.find({ type: 'freeroll' });
-    console.log(`📦 Found ${all.length} freeroll tournaments total`);
+    try {
+      const all = await Tournament.find({ type: 'freeroll' });
+      console.log(`📦 Found ${all.length} freeroll tournaments total`);
 
-    const filtered = all.filter(t => 
-      t.entryFee === 0 &&
-      t.status === 'scheduled'
-    );
-    console.log(`🎯 Returning ${filtered.length} scheduled freerolls`);
+      const filtered = all.filter(t =>
+        t.entryFee === 0 &&
+        t.status === 'scheduled'
+      );
+      console.log(`🎯 Returning ${filtered.length} scheduled freerolls`);
 
-    res.status(200).json(filtered);
-  } catch (err) {
-    console.error('❌ Failed to fetch freerolls:', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
+      res.status(200).json(filtered);
+    } catch (err) {
+      console.error('❌ Failed to fetch freerolls:', err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
 
   // ✅ POST /freeroll/register/:id — join a freeroll and spawn matches
   router.post('/register/:id', async (req, res) => {
@@ -44,6 +44,7 @@ module.exports = function (io) {
       const tournament = await Tournament.findOne({ id, entryFee: 0 });
       if (!tournament) return res.status(404).json({ error: 'Freeroll not found' });
 
+      // Normalize registeredPlayers array
       tournament.registeredPlayers = Array.isArray(tournament.registeredPlayers)
         ? tournament.registeredPlayers.map(p => (typeof p === 'string' ? { id: p } : p))
         : [];
@@ -97,9 +98,22 @@ module.exports = function (io) {
           });
 
           await matchDoc.save();
+
+          // ✅ Emit matchStart with tournamentId included
           pair.forEach(player => {
-            io.to(player).emit('matchStart', matchState);
+            io.to(player).emit('matchStart', {
+              ...matchState,
+              tournamentId: tournament.id,
+            });
           });
+
+          // Optional: also emit to the tournament room so spectators/UI can react
+          io.to(tournament.id).emit('matchStart', {
+            ...matchState,
+            tournamentId: tournament.id,
+          });
+
+          console.log(`🎮 matchStart emitted for match ${matchId} in tournament ${tournament.id}`);
         }
 
         // Calculate prize pool
@@ -168,8 +182,16 @@ module.exports = function (io) {
         });
 
         pair.forEach(player => {
-          io.to(player).emit('matchStart', matchState);
+          io.to(player).emit('matchStart', {
+            ...matchState,
+            tournamentId: tournament.id,
+          });
           console.log(`🎮 matchStart manually emitted to ${player}`);
+        });
+
+        io.to(tournament.id).emit('matchStart', {
+          ...matchState,
+          tournamentId: tournament.id,
         });
       }
 

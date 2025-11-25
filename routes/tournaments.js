@@ -117,7 +117,10 @@ module.exports = function(io) {
             io.to(playerId).emit('matchStart', matchState);
           });
 
-          console.log(`🎮 Emitted matchStart for ${matchId}`);
+          // ✅ also emit to tournament room
+          io.to(id).emit('matchStart', matchState);
+
+          console.log(`🎮 Emitted matchStart for ${matchId} in tournament ${id}`);
         }
 
         tournament.status = 'live';
@@ -199,7 +202,10 @@ module.exports = function(io) {
             io.to(playerId).emit('matchStart', matchState);
           });
 
-          console.log(`🎮 Emitted matchStart for ${matchId}`);
+          // ✅ also emit to tournament room
+          io.to(tournament.id).emit('matchStart', matchState);
+
+          console.log(`🎮 Emitted matchStart for ${matchId} in tournament ${tournament.id}`);
         }
 
         tournament.status = 'live';
