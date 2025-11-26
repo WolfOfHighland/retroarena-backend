@@ -1,59 +1,6 @@
 const User = require('../models/User');
+const { saveMatchState } = require('../utils/matchStateUtils'); // <-- import your utils
 
-function generateBracket(players, matchSize = 2) {
-  const bracket = [];
-  for (let i = 0; i < players.length; i += matchSize) {
-    const matchPlayers = players.slice(i, i + matchSize);
-    if (matchPlayers.length === matchSize) {
-      bracket.push(matchPlayers);
-    }
-  }
-  return bracket;
-}
-
-function fillWithBye(players) {
-  const filled = [...players];
-  const hasBye = filled.includes('BYE');
-  if (filled.length % 2 !== 0 && !hasBye) {
-    filled.push('BYE');
-  }
-  return filled;
-}
-
-function createMatchState(matchId, players, config = {}) {
-  return {
-    matchId,
-    rom: config.rom || 'NHL_95.bin',
-    core: config.core || 'genesis_plus_gx',
-    goalieMode: config.goalieMode || 'manual_goalie',
-    periodLength: config.periodLength || 5,
-    players,
-    round: config.round || 1,
-    matchIndex: config.matchIndex || 0,
-  };
-}
-
-function advanceWinners(winners, matchSize = 2) {
-  const filled = fillWithBye(winners);
-  const bracket = [];
-
-  for (let i = 0; i < filled.length; i += matchSize) {
-    const pair = filled.slice(i, i + matchSize);
-
-    if (pair.includes('BYE')) {
-      const autoWinner = pair.find(p => p !== 'BYE');
-      if (autoWinner) {
-        bracket.push([autoWinner]); // auto-advance
-      }
-    } else {
-      bracket.push(pair);
-    }
-  }
-
-  return bracket;
-}
-
-// 🧠 BracketManager class for multi-round orchestration
 class BracketManager {
   constructor(io, tournament) {
     this.io = io;
@@ -74,8 +21,11 @@ class BracketManager {
 
     console.log(`🏆 Winner recorded for ${matchId}: ${winnerId}`);
 
-    const expectedWinners = Math.ceil(this.tournament.maxPlayers / Math.pow(2, this.round));
-    if (this.winnersByRound[roundKey].length === expectedWinners) {
+    // Count matches in this round to know when to advance
+    const currentBracket = generateBracket(this.winnersByRound[roundKey]);
+    const expectedWinners = currentBracket.length;
+
+    if (this.winnersByRound[roundKey].length >= expectedWinners) {
       await this.advanceRound();
     }
   }
@@ -91,6 +41,7 @@ class BracketManager {
     this.tournament.winnersByRound = this.winnersByRound;
     await this.tournament.save();
 
+    // Champion check
     if (nextBracket.length === 1 && nextBracket[0].length === 1) {
       const champion = nextBracket[0][0];
       console.log(`👑 Champion declared: ${champion}`);
@@ -116,6 +67,7 @@ class BracketManager {
       return;
     }
 
+    // Emit next round matches
     nextBracket.forEach((pair, index) => {
       const matchId = `${this.tournament.id}-r${this.round}-m${index}`;
       const matchState = createMatchState(matchId, pair, {
@@ -125,21 +77,19 @@ class BracketManager {
         periodLength: this.tournament.periodLength,
         round: this.round,
         matchIndex: index,
+        tournamentId: this.tournament.id, // <-- ensure tournamentId is included
       });
+
+      // 🔑 Persist match state immediately
+      saveMatchState(matchId, matchState);
 
       pair.forEach(playerId => {
-        this.io.to(playerId).emit('matchStart', matchState);
+        if (playerId !== 'BYE') {
+          this.io.to(playerId).emit('matchStart', matchState);
+        }
       });
 
-      console.log(`🎮 Emitted matchStart for ${matchId}`);
+      console.log(`🎮 Emitted & saved matchStart for ${matchId}`);
     });
   }
 }
-
-module.exports = {
-  generateBracket,
-  fillWithBye,
-  createMatchState,
-  advanceWinners,
-  BracketManager,
-};
