@@ -3,9 +3,6 @@ const Tournament = require('../models/Tournament');
 const MatchState = require('../models/MatchState');
 const User = require('../models/User');
 const {
-  generateBracket,
-  createMatchState,
-  advanceWinners,
   BracketManager
 } = require('../utils/bracketManager');
 
@@ -70,51 +67,8 @@ module.exports = function (io) {
 
       // Spawn matches if full
       if (tournament.registeredPlayers.length === tournament.maxPlayers) {
-        const round = 1;
-        const bracket = generateBracket(tournament.registeredPlayers.map(p => p.id));
-
-        for (let index = 0; index < bracket.length; index++) {
-          const pair = bracket[index];
-          const matchId = `${tournament.id}-r${round}-m${index}`;
-          const matchState = createMatchState(matchId, pair, {
-            rom: tournament.rom,
-            core: tournament.core,
-            goalieMode: tournament.goalieMode,
-            periodLength: tournament.periodLength,
-            round,
-            matchIndex: index
-          });
-
-          const matchDoc = new MatchState({
-            matchId,
-            tournamentId: tournament.id,
-            players: pair,
-            round,
-            matchIndex: index,
-            rom: tournament.rom,
-            core: tournament.core,
-            goalieMode: tournament.goalieMode,
-            periodLength: tournament.periodLength
-          });
-
-          await matchDoc.save();
-
-          // ✅ Emit matchStart with tournamentId included
-          pair.forEach(player => {
-            io.to(player).emit('matchStart', {
-              ...matchState,
-              tournamentId: tournament.id,
-            });
-          });
-
-          // Optional: also emit to the tournament room so spectators/UI can react
-          io.to(tournament.id).emit('matchStart', {
-            ...matchState,
-            tournamentId: tournament.id,
-          });
-
-          console.log(`🎮 matchStart emitted for match ${matchId} in tournament ${tournament.id}`);
-        }
+        const manager = new BracketManager(io, tournament);
+        await manager.startRound(tournament.registeredPlayers.map(p => p.id));
 
         // Calculate prize pool
         const rakePercent = tournament.rakePercent ?? 0.10;
@@ -166,34 +120,8 @@ module.exports = function (io) {
         return res.status(400).json({ error: 'Tournament not full' });
       }
 
-      const round = 1;
-      const bracket = generateBracket(tournament.registeredPlayers.map(p => p.id));
-
-      for (let index = 0; index < bracket.length; index++) {
-        const pair = bracket[index];
-        const matchId = `${tournament.id}-r${round}-m${index}`;
-        const matchState = createMatchState(matchId, pair, {
-          rom: tournament.rom,
-          core: tournament.core,
-          goalieMode: tournament.goalieMode,
-          periodLength: tournament.periodLength,
-          round,
-          matchIndex: index
-        });
-
-        pair.forEach(player => {
-          io.to(player).emit('matchStart', {
-            ...matchState,
-            tournamentId: tournament.id,
-          });
-          console.log(`🎮 matchStart manually emitted to ${player}`);
-        });
-
-        io.to(tournament.id).emit('matchStart', {
-          ...matchState,
-          tournamentId: tournament.id,
-        });
-      }
+      const manager = new BracketManager(io, tournament);
+      await manager.startRound(tournament.registeredPlayers.map(p => p.id));
 
       res.status(200).json({ message: 'matchStart emitted', tournamentId });
     } catch (err) {

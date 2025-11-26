@@ -1,5 +1,59 @@
 const User = require('../models/User');
-const { saveMatchState } = require('../utils/matchState'); // <-- import your utils
+const { saveMatchState } = require('./matchState'); // ✅ correct import
+
+function generateBracket(players, matchSize = 2) {
+  const bracket = [];
+  for (let i = 0; i < players.length; i += matchSize) {
+    const matchPlayers = players.slice(i, i + matchSize);
+    if (matchPlayers.length > 0) {
+      bracket.push(matchPlayers);
+    }
+  }
+  return bracket;
+}
+
+function fillWithBye(players) {
+  const filled = [...players];
+  const hasBye = filled.includes('BYE');
+  if (filled.length % 2 !== 0 && !hasBye) {
+    filled.push('BYE');
+  }
+  return filled;
+}
+
+function createMatchState(matchId, players, config = {}) {
+  return {
+    matchId,
+    rom: config.rom || 'NHL_95.bin',
+    core: config.core || 'genesis_plus_gx',
+    goalieMode: config.goalieMode || 'manual_goalie',
+    periodLength: config.periodLength || 5,
+    players,
+    round: config.round || 1,
+    matchIndex: config.matchIndex || 0,
+    tournamentId: config.tournamentId,
+  };
+}
+
+function advanceWinners(winners, matchSize = 2) {
+  const filled = fillWithBye(winners);
+  const bracket = [];
+
+  for (let i = 0; i < filled.length; i += matchSize) {
+    const pair = filled.slice(i, i + matchSize);
+
+    if (pair.includes('BYE')) {
+      const autoWinner = pair.find(p => p !== 'BYE');
+      if (autoWinner) {
+        bracket.push([autoWinner]); // auto‑advance
+      }
+    } else {
+      bracket.push(pair);
+    }
+  }
+
+  return bracket;
+}
 
 class BracketManager {
   constructor(io, tournament) {
@@ -7,6 +61,39 @@ class BracketManager {
     this.tournament = tournament;
     this.winnersByRound = tournament.winnersByRound || {};
     this.round = Object.keys(this.winnersByRound).length || 1;
+  }
+
+  /**
+   * Emit initial matches once tournament fills
+   */
+  async startRound(players) {
+    const bracket = generateBracket(players);
+    this.round = 1;
+    this.winnersByRound = { r1: [] };
+
+    bracket.forEach((pair, index) => {
+      const matchId = `${this.tournament.id}-r1-m${index}`;
+      const matchState = createMatchState(matchId, pair, {
+        rom: this.tournament.rom,
+        core: this.tournament.core,
+        goalieMode: this.tournament.goalieMode,
+        periodLength: this.tournament.periodLength,
+        round: 1,
+        matchIndex: index,
+        tournamentId: this.tournament.id,
+      });
+
+      // Persist immediately
+      saveMatchState(matchId, matchState);
+
+      pair.forEach(playerId => {
+        if (playerId !== 'BYE') {
+          this.io.to(playerId).emit('matchStart', matchState);
+        }
+      });
+
+      console.log(`🎮 Initial matchStart emitted for ${matchId}`);
+    });
   }
 
   async recordResult(matchId, winnerId) {
@@ -21,10 +108,13 @@ class BracketManager {
 
     console.log(`🏆 Winner recorded for ${matchId}: ${winnerId}`);
 
-    // Count matches in this round to know when to advance
-    const currentBracket = generateBracket(this.winnersByRound[roundKey]);
-    const expectedWinners = currentBracket.length;
+    // For 2‑player tournaments, declare champion immediately
+    if (this.tournament.maxPlayers === 2) {
+      await this.advanceRound();
+      return;
+    }
 
+    const expectedWinners = Math.ceil(this.tournament.maxPlayers / Math.pow(2, this.round));
     if (this.winnersByRound[roundKey].length >= expectedWinners) {
       await this.advanceRound();
     }
@@ -77,10 +167,9 @@ class BracketManager {
         periodLength: this.tournament.periodLength,
         round: this.round,
         matchIndex: index,
-        tournamentId: this.tournament.id, // <-- ensure tournamentId is included
+        tournamentId: this.tournament.id,
       });
 
-      // 🔑 Persist match state immediately
       saveMatchState(matchId, matchState);
 
       pair.forEach(playerId => {
@@ -93,3 +182,11 @@ class BracketManager {
     });
   }
 }
+
+module.exports = {
+  generateBracket,
+  fillWithBye,
+  createMatchState,
+  advanceWinners,
+  BracketManager,
+};

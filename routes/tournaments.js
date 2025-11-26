@@ -1,7 +1,7 @@
 const express = require('express');
 const Tournament = require('../models/Tournament');
-const { generateBracket, createMatchState } = require('../utils/bracketManager');
-const { saveMatchState, loadMatchStatesByTournament } = require('../utils/matchState');
+const { BracketManager } = require('../utils/bracketManager');
+const { loadMatchStatesByTournament } = require('../utils/matchState');
 
 module.exports = function(io) {
   const router = express.Router();
@@ -92,36 +92,8 @@ module.exports = function(io) {
       console.log('✅ Tournament created:', tournament);
 
       if (maxPlayers && players.length === maxPlayers) {
-        const round = 1;
-        const bracket = generateBracket(players);
-
-        for (let index = 0; index < bracket.length; index++) {
-          const pair = bracket[index];
-          const matchId = `${id}-r${round}-m${index}`;
-          const matchState = {
-            ...createMatchState(matchId, pair, {
-              rom,
-              core,
-              goalieMode,
-              periodLength,
-              round,
-              matchIndex: index
-            }),
-            tournamentId: id
-          };
-
-          console.log(`🧪 Saving matchState for ${matchId}`);
-          saveMatchState(matchId, matchState);
-
-          pair.forEach(playerId => {
-            io.to(playerId).emit('matchStart', matchState);
-          });
-
-          // ✅ also emit to tournament room
-          io.to(id).emit('matchStart', matchState);
-
-          console.log(`🎮 Emitted matchStart for ${matchId} in tournament ${id}`);
-        }
+        const manager = new BracketManager(io, tournament);
+        await manager.startRound(players);
 
         tournament.status = 'live';
         await tournament.save();
@@ -177,36 +149,8 @@ module.exports = function(io) {
         tournament.maxPlayers &&
         tournament.registeredPlayers.length === tournament.maxPlayers
       ) {
-        const round = 1;
-        const bracket = generateBracket(tournament.registeredPlayers);
-
-        for (let index = 0; index < bracket.length; index++) {
-          const pair = bracket[index];
-          const matchId = `${tournament.id}-r${round}-m${index}`;
-          const matchState = {
-            ...createMatchState(matchId, pair, {
-              rom: tournament.rom,
-              core: tournament.core,
-              goalieMode: tournament.goalieMode,
-              periodLength: tournament.periodLength,
-              round,
-              matchIndex: index
-            }),
-            tournamentId: tournament.id
-          };
-
-          console.log(`🧪 Saving matchState for ${matchId}`);
-          saveMatchState(matchId, matchState);
-
-          pair.forEach(playerId => {
-            io.to(playerId).emit('matchStart', matchState);
-          });
-
-          // ✅ also emit to tournament room
-          io.to(tournament.id).emit('matchStart', matchState);
-
-          console.log(`🎮 Emitted matchStart for ${matchId} in tournament ${tournament.id}`);
-        }
+        const manager = new BracketManager(io, tournament);
+        await manager.startRound(tournament.registeredPlayers);
 
         tournament.status = 'live';
         await tournament.save();

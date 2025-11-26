@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Tournament = require('../models/Tournament');
 const MatchState = require('../models/MatchState');
-const { generateBracket, createMatchState } = require('../utils/bracketManager');
+const { BracketManager } = require('../utils/bracketManager');
 
 const getMaxPlayers = (val) => {
   if (typeof val === 'number') return val;
@@ -98,46 +98,8 @@ module.exports = function(io) {
         tournament.maxPlayers &&
         tournament.registeredPlayers.length === tournament.maxPlayers
       ) {
-        const round = 1;
-        const bracket = generateBracket(tournament.registeredPlayers);
-
-        bracket.forEach(async (pair, index) => {
-          const matchId = `${tournament.id}-r${round}-m${index}`;
-          const matchState = {
-            ...createMatchState(matchId, pair, {
-              rom: tournament.rom,
-              core: tournament.core,
-              goalieMode: tournament.goalieMode,
-              periodLength: tournament.periodLength,
-              round,
-              matchIndex: index
-            }),
-            tournamentId: tournament.id   // ✅ include tournamentId
-          };
-
-          const matchDoc = new MatchState({
-            matchId,
-            tournamentId: tournament.id,
-            players: pair,
-            round,
-            matchIndex: index,
-            rom: tournament.rom,
-            core: tournament.core,
-            goalieMode: tournament.goalieMode,
-            periodLength: tournament.periodLength
-          });
-
-          await matchDoc.save();
-
-          pair.forEach(player => {
-            io.to(player).emit('matchStart', matchState);
-          });
-
-          // ✅ also emit to tournament room so lobby UI can react
-          io.to(tournament.id).emit('matchStart', matchState);
-
-          console.log(`🎮 matchStart emitted for match ${matchId} in tournament ${tournament.id}`);
-        });
+        const manager = new BracketManager(io, tournament);
+        await manager.startRound(tournament.registeredPlayers);
 
         tournament.status = 'live';
         await tournament.save();
@@ -238,7 +200,7 @@ module.exports = function(io) {
       await testTournament.save();
       console.log(`🧪 Test tournament created: ${testTournament.id}`);
       res.status(201).json({ message: 'Test tournament created', tournament: testTournament });
-       } catch (err) {
+    } catch (err) {
       console.error('❌ Test tournament creation error:', err.message);
       res.status(500).json({ error: 'Server error' });
     }
@@ -260,4 +222,3 @@ module.exports = function(io) {
 
   return router;
 };
- 
