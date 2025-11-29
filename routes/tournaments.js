@@ -14,35 +14,40 @@ module.exports = function(io) {
         status: 'scheduled'
       });
 
-      console.log('🧪 Raw tournaments from DB:', tournaments.map(t => ({
-        id: t.id,
-        type: t.type,
-        startTime: t.startTime
-      })));
+      console.log(
+        '🧪 Raw tournaments from DB:',
+        tournaments.map(t => ({
+          id: t.id,
+          type: t.type,
+          startTime: t.startTime
+        }))
+      );
 
       const enriched = tournaments.map(t => {
         const entryFee = t.entryFee ?? 0;
-        const rakePercent = entryFee <= 10 ? 0.10 : entryFee <= 20 ? 0.08 : 0.05;
-        const rakeAmount = Math.round(entryFee * rakePercent * 100) / 100;
-        const netEntry = entryFee - rakeAmount;
-        const maxPlayers = typeof t.maxPlayers === 'number' && !isNaN(t.maxPlayers)
-          ? t.maxPlayers
-          : undefined;
-        const registeredCount = Array.isArray(t.registeredPlayers) ? t.registeredPlayers.length : 0;
-        const prizeAmount = t.prizeType === 'guaranteed'
-          ? t.prizeAmount ?? (maxPlayers ? netEntry * maxPlayers : 0)
-          : netEntry * registeredCount;
+        const maxPlayers =
+          typeof t.maxPlayers === 'number' && !isNaN(t.maxPlayers)
+            ? t.maxPlayers
+            : undefined;
+        const registeredCount = Array.isArray(t.registeredPlayers)
+          ? t.registeredPlayers.length
+          : 0;
+
+        // ✅ Prize pool logic: use stored prizeAmount or default to 0
+        const prizeAmount = t.prizeAmount || 0;
 
         return {
           id: t.id || t._id.toString(),
           name: t.name,
           entryFee,
-          registeredPlayers: Array.isArray(t.registeredPlayers) ? t.registeredPlayers : [],
+          registeredPlayers: Array.isArray(t.registeredPlayers)
+            ? t.registeredPlayers
+            : [],
           maxPlayers,
-          prizeType: t.prizeType ?? 'dynamic',
+          prizeType: t.prizeType ?? 'fixed',
           prizeAmount,
-          rakePercent,
-          rakeAmount,
+          rakePercent: 0, // no rake in skill-based model
+          rakeAmount: 0,
           game: t.game,
           goalieMode: t.goalieMode,
           elimination: t.elimination,
@@ -60,9 +65,13 @@ module.exports = function(io) {
 
   // ✅ POST /api/tournaments/create — create and launch tournament
   router.post('/create', async (req, res) => {
-    const { id, maxPlayers, rom, core, goalieMode, periodLength, players } = req.body;
+    const { id, maxPlayers, rom, core, goalieMode, periodLength, players } =
+      req.body;
 
-    console.log('[RRC] Incoming tournament payload:', JSON.stringify(req.body, null, 2));
+    console.log(
+      '[RRC] Incoming tournament payload:',
+      JSON.stringify(req.body, null, 2)
+    );
 
     if (!id || !Array.isArray(players) || players.length < 2) {
       console.warn('⚠️ Invalid tournament payload');
@@ -85,7 +94,9 @@ module.exports = function(io) {
         })),
         status: 'scheduled',
         type: 'scheduled',
-        game: 'NHL 95'
+        game: 'NHL 95',
+        prizeAmount: 0, // ✅ default to 0 or set sponsor-funded value
+        prizeType: 'fixed'
       });
 
       await tournament.save();
@@ -99,10 +110,14 @@ module.exports = function(io) {
         await tournament.save();
       }
 
-      res.status(201).json({ message: 'Tournament created', tournament });
+      res
+        .status(201)
+        .json({ message: 'Tournament created', tournament });
     } catch (err) {
       console.error('❌ Tournament creation error:', err.stack || err.message);
-      res.status(500).json({ error: 'Server error during tournament creation' });
+      res
+        .status(500)
+        .json({ error: 'Server error during tournament creation' });
     }
   });
 
@@ -114,12 +129,16 @@ module.exports = function(io) {
     try {
       if (!playerId || !tournamentId) {
         console.warn('⚠️ Missing playerId or tournamentId');
-        return res.status(400).json({ error: 'Missing playerId or tournamentId' });
+        return res
+          .status(400)
+          .json({ error: 'Missing playerId or tournamentId' });
       }
 
       if (playerId.startsWith('guest')) {
         console.warn(`⚠️ Guest attempted to register: ${playerId}`);
-        return res.status(403).json({ error: 'Guests cannot register for tournaments' });
+        return res
+          .status(403)
+          .json({ error: 'Guests cannot register for tournaments' });
       }
 
       const tournament = await Tournament.findOne({ id: tournamentId });
@@ -137,13 +156,17 @@ module.exports = function(io) {
       );
       if (alreadyRegistered) {
         console.warn(`⚠️ Player already registered: ${playerId}`);
-        return res.status(400).json({ error: 'Player already registered' });
+        return res
+          .status(400)
+          .json({ error: 'Player already registered' });
       }
 
       tournament.registeredPlayers.push(playerId);
       await tournament.save();
 
-      console.log(`🧪 Tournament ${tournament.id} has ${tournament.registeredPlayers.length}/${tournament.maxPlayers} players`);
+      console.log(
+        `🧪 Tournament ${tournament.id} has ${tournament.registeredPlayers.length}/${tournament.maxPlayers} players`
+      );
 
       if (
         tournament.maxPlayers &&
@@ -156,10 +179,14 @@ module.exports = function(io) {
         await tournament.save();
       }
 
-      return res.status(200).json({ message: 'Registered for tournament', tournament });
+      return res
+        .status(200)
+        .json({ message: 'Registered for tournament', tournament });
     } catch (err) {
       console.error('❌ Registration error:', err.stack || err.message);
-      return res.status(500).json({ error: 'Server error during registration' });
+      return res
+        .status(500)
+        .json({ error: 'Server error during registration' });
     }
   });
 

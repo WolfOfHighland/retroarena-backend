@@ -30,18 +30,15 @@ module.exports = function(io) {
       console.log(`🎯 Returning ${filtered.length} visible sit-n-go tournaments`);
 
       const enriched = filtered.map(t => {
-        const rake = t.rakePercent ?? 0.10;
-        const netEntry = t.entryFee * (1 - rake);
-        const prizeAmount = netEntry * getMaxPlayers(t.maxPlayers);
-
         return {
           id: t.id || t._id.toString(),
           name: t.name,
           entryFee: t.entryFee,
           registeredPlayers: Array.isArray(t.registeredPlayers) ? t.registeredPlayers : [],
           prizeType: t.prizeType,
-          prizeAmount,
-          rakeAmount: t.entryFee * rake,
+          // ✅ Use stored prizeAmount or default to 0 (no entry-fee math)
+          prizeAmount: t.prizeAmount || 0,
+          rakeAmount: 0, // no rake applied in skill-based model
           game: t.game,
           goalieMode: t.goalieMode,
           elimination: t.elimination,
@@ -125,7 +122,7 @@ module.exports = function(io) {
         maxPlayers: original.maxPlayers,
         entryFee: original.entryFee,
         prizeType: original.prizeType,
-        prizeAmount: original.prizeAmount,
+        prizeAmount: original.prizeAmount || 0, // ✅ carry forward fixed/sponsor prize
         elimination: original.elimination,
         goalieMode: original.goalieMode,
         periodLength: original.periodLength,
@@ -154,10 +151,8 @@ module.exports = function(io) {
       let updatedCount = 0;
 
       for (const t of tournaments) {
-        const rake = t.rakePercent ?? 0.10;
-        const netEntry = t.entryFee * (1 - rake);
-        const max = getMaxPlayers(t.maxPlayers);
-        const newPrize = netEntry * max;
+        // ✅ No entry-fee math; just ensure prizeAmount is set
+        const newPrize = t.prizeAmount || 0;
 
         if (t.prizeAmount !== newPrize) {
           t.prizeAmount = newPrize;
@@ -183,8 +178,8 @@ module.exports = function(io) {
         type: 'sit-n-go',
         maxPlayers: 2,
         entryFee: 0,
-        prizeType: 'dynamic',
-        prizeAmount: 0,
+        prizeType: 'fixed',
+        prizeAmount: 0, // ✅ default to 0 or sponsor-funded
         elimination: 'single',
         goalieMode: 'auto',
         periodLength: 5,

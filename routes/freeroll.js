@@ -2,9 +2,7 @@ const express = require('express');
 const Tournament = require('../models/Tournament');
 const MatchState = require('../models/MatchState');
 const User = require('../models/User');
-const {
-  BracketManager
-} = require('../utils/bracketManager');
+const { BracketManager } = require('../utils/bracketManager');
 
 module.exports = function (io) {
   const router = express.Router();
@@ -15,9 +13,8 @@ module.exports = function (io) {
       const all = await Tournament.find({ type: 'freeroll' });
       console.log(`📦 Found ${all.length} freeroll tournaments total`);
 
-      const filtered = all.filter(t =>
-        t.entryFee === 0 &&
-        t.status === 'scheduled'
+      const filtered = all.filter(
+        (t) => t.entryFee === 0 && t.status === 'scheduled'
       );
       console.log(`🎯 Returning ${filtered.length} scheduled freerolls`);
 
@@ -39,18 +36,23 @@ module.exports = function (io) {
       }
 
       const tournament = await Tournament.findOne({ id, entryFee: 0 });
-      if (!tournament) return res.status(404).json({ error: 'Freeroll not found' });
+      if (!tournament)
+        return res.status(404).json({ error: 'Freeroll not found' });
 
       // Normalize registeredPlayers array
       tournament.registeredPlayers = Array.isArray(tournament.registeredPlayers)
-        ? tournament.registeredPlayers.map(p => (typeof p === 'string' ? { id: p } : p))
+        ? tournament.registeredPlayers.map((p) =>
+            typeof p === 'string' ? { id: p } : p
+          )
         : [];
 
       if (tournament.registeredPlayers.length >= tournament.maxPlayers) {
         return res.status(403).json({ error: 'Tournament is full' });
       }
 
-      const alreadyJoined = tournament.registeredPlayers.some(p => p.id === playerId);
+      const alreadyJoined = tournament.registeredPlayers.some(
+        (p) => p.id === playerId
+      );
       if (alreadyJoined) {
         return res.status(200).json({ message: 'Already joined' });
       }
@@ -59,7 +61,7 @@ module.exports = function (io) {
         id: playerId,
         displayName,
         isGuest: true,
-        joinedAt: new Date()
+        joinedAt: new Date(),
       });
 
       await tournament.save();
@@ -68,12 +70,11 @@ module.exports = function (io) {
       // Spawn matches if full
       if (tournament.registeredPlayers.length === tournament.maxPlayers) {
         const manager = new BracketManager(io, tournament);
-        await manager.startRound(tournament.registeredPlayers.map(p => p.id));
+        await manager.startRound(tournament.registeredPlayers.map((p) => p.id));
 
-        // Calculate prize pool
-        const rakePercent = tournament.rakePercent ?? 0.10;
-        const netEntry = tournament.entryFee * (1 - rakePercent);
-        tournament.prizeAmount = netEntry * tournament.maxPlayers;
+        // ✅ Prize pool logic for skill-based freerolls
+        // No entry-fee math; prizeAmount should be fixed or sponsor-funded
+        tournament.prizeAmount = tournament.prizeAmount || 0;
         tournament.status = 'live';
         await tournament.save();
 
@@ -94,7 +95,7 @@ module.exports = function (io) {
           elimination: tournament.elimination,
           rom: tournament.rom,
           core: tournament.core,
-          rakePercent: tournament.rakePercent
+          rakePercent: tournament.rakePercent,
         });
 
         await newTournament.save();
@@ -113,15 +114,22 @@ module.exports = function (io) {
     const { tournamentId } = req.body;
 
     try {
-      const tournament = await Tournament.findOne({ id: tournamentId, entryFee: 0 });
-      if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+      const tournament = await Tournament.findOne({
+        id: tournamentId,
+        entryFee: 0,
+      });
+      if (!tournament)
+        return res.status(404).json({ error: 'Tournament not found' });
 
-      if (!Array.isArray(tournament.registeredPlayers) || tournament.registeredPlayers.length < 2) {
+      if (
+        !Array.isArray(tournament.registeredPlayers) ||
+        tournament.registeredPlayers.length < 2
+      ) {
         return res.status(400).json({ error: 'Tournament not full' });
       }
 
       const manager = new BracketManager(io, tournament);
-      await manager.startRound(tournament.registeredPlayers.map(p => p.id));
+      await manager.startRound(tournament.registeredPlayers.map((p) => p.id));
 
       res.status(200).json({ message: 'matchStart emitted', tournamentId });
     } catch (err) {
@@ -136,7 +144,8 @@ module.exports = function (io) {
 
     try {
       const tournament = await Tournament.findOne({ id: tournamentId });
-      if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+      if (!tournament)
+        return res.status(404).json({ error: 'Tournament not found' });
 
       const manager = new BracketManager(io, tournament);
       await manager.recordResult(matchId, winnerId);
