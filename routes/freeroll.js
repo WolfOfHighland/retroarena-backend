@@ -1,7 +1,6 @@
 const express = require('express');
 const Tournament = require('../models/Tournament');
 const MatchState = require('../models/MatchState');
-const User = require('../models/User');
 const { BracketManager } = require('../utils/bracketManager');
 
 module.exports = function (io) {
@@ -18,7 +17,22 @@ module.exports = function (io) {
       );
       console.log(`🎯 Returning ${filtered.length} scheduled freerolls`);
 
-      res.status(200).json(filtered);
+      // ✅ Enrich response: no entry-fee math, prizeAmount is fixed/sponsor-funded
+      const enriched = filtered.map(t => ({
+        id: t.id || t._id.toString(),
+        name: t.name,
+        game: t.game,
+        goalieMode: t.goalieMode,
+        elimination: t.elimination,
+        maxPlayers: t.maxPlayers,
+        entryFee: t.entryFee,
+        registeredPlayers: Array.isArray(t.registeredPlayers) ? t.registeredPlayers : [],
+        status: t.status,
+        prizeAmount: t.prizeAmount || 0,
+        prizeType: 'fixed'
+      }));
+
+      res.status(200).json(enriched);
     } catch (err) {
       console.error('❌ Failed to fetch freerolls:', err);
       res.status(500).json({ error: 'Server error' });
@@ -73,7 +87,6 @@ module.exports = function (io) {
         await manager.startRound(tournament.registeredPlayers.map((p) => p.id));
 
         // ✅ Prize pool logic for skill-based freerolls
-        // No entry-fee math; prizeAmount should be fixed or sponsor-funded
         tournament.prizeAmount = tournament.prizeAmount || 0;
         tournament.status = 'live';
         await tournament.save();
@@ -90,7 +103,7 @@ module.exports = function (io) {
           registeredPlayers: [],
           entryFee: tournament.entryFee,
           maxPlayers: tournament.maxPlayers,
-          prizeType: tournament.prizeType,
+          prizeType: 'fixed',
           prizeAmount: 0,
           elimination: tournament.elimination,
           rom: tournament.rom,
