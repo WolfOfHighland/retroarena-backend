@@ -1,10 +1,15 @@
-require("dotenv").config(); // ✅ Load .env variables
+require("dotenv").config();
 const mongoose = require("mongoose");
 const Tournament = require("../models/Tournament");
 
+// ✅ Freerolls now use RRP (Retro Rumble Points)
+// ✅ No dollars, no rake, no dynamic prize logic
+// ✅ prizeType = "fixed"
+// ✅ prizeAmount = RRP value
+
 const freerollTemplates = [
   {
-    id: `freeroll-auto-2-${Date.now()}`,
+    id: "freeroll-auto-2",
     name: "NHL 95 Auto (2‑max)",
     startTime: null,
     game: "NHL 95",
@@ -12,18 +17,17 @@ const freerollTemplates = [
     elimination: "single",
     maxPlayers: 2,
     entryFee: 0,
-    prizeType: "dynamic",
-    prizeAmount: 900,
+    prizeType: "fixed",
+    prizeAmount: 900, // ✅ 900 RRP
     registeredPlayers: [],
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "freeroll",
     status: "scheduled",
-    periodLength: 5,
-    rakePercent: 0.10,
+    periodLength: 5
   },
   {
-    id: `freeroll-manual-4-${Date.now()}`,
+    id: "freeroll-manual-4",
     name: "NHL 95 Manual (4‑max)",
     startTime: null,
     game: "NHL 95",
@@ -31,18 +35,17 @@ const freerollTemplates = [
     elimination: "single",
     maxPlayers: 4,
     entryFee: 0,
-    prizeType: "dynamic",
-    prizeAmount: 3600,
+    prizeType: "fixed",
+    prizeAmount: 3600, // ✅ 3600 RRP
     registeredPlayers: [],
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "freeroll",
     status: "scheduled",
-    periodLength: 5,
-    rakePercent: 0.10,
+    periodLength: 5
   },
   {
-    id: `freeroll-manual-10-${Date.now()}`,
+    id: "freeroll-manual-10",
     name: "NHL 95 Manual (10‑max Double Elim)",
     startTime: null,
     game: "NHL 95",
@@ -50,38 +53,37 @@ const freerollTemplates = [
     elimination: "double",
     maxPlayers: 10,
     entryFee: 0,
-    prizeType: "dynamic",
-    prizeAmount: 18000,
+    prizeType: "fixed",
+    prizeAmount: 18000, // ✅ 18,000 RRP
     registeredPlayers: [],
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "freeroll",
     status: "scheduled",
-    periodLength: 5,
-    rakePercent: 0.10,
-  },
+    periodLength: 5
+  }
 ];
 
 async function seedFreerolls() {
   try {
     await Tournament.insertMany(freerollTemplates);
-    console.log("✅ Seeded Freeroll tournaments");
+    console.log("✅ Seeded Freeroll tournaments (RRP version)");
   } catch (err) {
     console.error("❌ Error seeding Freerolls:", err);
   }
 }
 
-// 👉 Export the function instead of running it immediately
 module.exports = seedFreerolls;
 
-// Optional: allow standalone execution
 if (require.main === module) {
-  mongoose.connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    dbName: "retro_rumble",
-  }).then(async () => {
-    await seedFreerolls();
-    mongoose.disconnect();
-  });
+  mongoose
+    .connect(process.env.MONGO_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      dbName: "retro_rumble"
+    })
+    .then(async () => {
+      await seedFreerolls();
+      mongoose.disconnect();
+    });
 }

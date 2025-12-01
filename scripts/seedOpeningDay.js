@@ -30,10 +30,22 @@ async function seedOpeningDay() {
         status: "scheduled",
         type: "scheduled",
         elimination: i === 7 ? "double" : "single",
-        entryFee: (i + 1) * 5,
+
+        // ✅ No entry fees in skill‑based model
+        entryFee: 0,
+
         registeredPlayers: [],
-        prizeType: "dynamic",
-        prizeAmount: 0,
+
+        // ✅ Fixed RRP prize model
+        prizeType: "fixed",
+
+        // ✅ RRP scaling (same pattern as freerolls/sit‑n‑gos)
+        // Example: 900, 1800, 2700, ... 7200
+        prizeAmount: (i + 1) * 900,
+
+        // ✅ Optional: add ROM/core if needed for consistency
+        rom: "NHL_95.bin",
+        core: "genesis_plus_gx",
       };
 
       tournaments.push(tournament);
@@ -41,7 +53,7 @@ async function seedOpeningDay() {
 
     await Tournament.deleteMany({ id: /opening-day-/ });
     await Tournament.insertMany(tournaments);
-    console.log("✅ Seeded 8 Opening Day tournaments (last one double elimination)");
+    console.log("✅ Seeded 8 Opening Day tournaments (RRP version)");
   } catch (err) {
     console.error("❌ Seed failed:", err);
   } finally {
