@@ -28,10 +28,19 @@ const playerSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+
+  // ✅ Player’s virtual wallet (coins or RRC)
   balance: {
     type: Number,
-    default: 0 // ✅ enables cashier and entry fee logic
+    default: 0
   },
+
+  // ✅ NEW: Qualification Tokens for Championship Entry
+  championshipTokens: {
+    type: Number,
+    default: 0
+  },
+
   createdAt: {
     type: Date,
     default: Date.now,
