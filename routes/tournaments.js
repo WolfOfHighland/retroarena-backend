@@ -1,5 +1,6 @@
 const express = require('express');
 const Tournament = require('../models/Tournament');
+const User = require('../models/User'); // ✅ for RRP + Tokens
 const { BracketManager } = require('../utils/bracketManager');
 const { loadMatchStatesByTournament } = require('../utils/matchState');
 
@@ -29,11 +30,7 @@ module.exports = function(io) {
           typeof t.maxPlayers === 'number' && !isNaN(t.maxPlayers)
             ? t.maxPlayers
             : undefined;
-        const registeredCount = Array.isArray(t.registeredPlayers)
-          ? t.registeredPlayers.length
-          : 0;
 
-        // ✅ Prize pool logic: use stored prizeAmount or default to 0
         const prizeAmount = t.prizeAmount || 0;
 
         return {
@@ -46,7 +43,7 @@ module.exports = function(io) {
           maxPlayers,
           prizeType: t.prizeType ?? 'fixed',
           prizeAmount,
-          rakePercent: 0, // no rake in skill-based model
+          rakePercent: 0,
           rakeAmount: 0,
           game: t.game,
           goalieMode: t.goalieMode,
@@ -65,13 +62,9 @@ module.exports = function(io) {
 
   // ✅ POST /api/tournaments/create — create and launch tournament
   router.post('/create', async (req, res) => {
-    const { id, maxPlayers, rom, core, goalieMode, periodLength, players } =
-      req.body;
+    const { id, maxPlayers, rom, core, goalieMode, periodLength, players } = req.body;
 
-    console.log(
-      '[RRC] Incoming tournament payload:',
-      JSON.stringify(req.body, null, 2)
-    );
+    console.log('[RRC] Incoming tournament payload:', JSON.stringify(req.body, null, 2));
 
     if (!id || !Array.isArray(players) || players.length < 2) {
       console.warn('⚠️ Invalid tournament payload');
@@ -95,7 +88,7 @@ module.exports = function(io) {
         status: 'scheduled',
         type: 'scheduled',
         game: 'NHL 95',
-        prizeAmount: 0, // ✅ default to 0 or set sponsor-funded value
+        prizeAmount: 0,
         prizeType: 'fixed'
       });
 
@@ -110,14 +103,10 @@ module.exports = function(io) {
         await tournament.save();
       }
 
-      res
-        .status(201)
-        .json({ message: 'Tournament created', tournament });
+      res.status(201).json({ message: 'Tournament created', tournament });
     } catch (err) {
       console.error('❌ Tournament creation error:', err.stack || err.message);
-      res
-        .status(500)
-        .json({ error: 'Server error during tournament creation' });
+      res.status(500).json({ error: 'Server error during tournament creation' });
     }
   });
 
@@ -129,16 +118,12 @@ module.exports = function(io) {
     try {
       if (!playerId || !tournamentId) {
         console.warn('⚠️ Missing playerId or tournamentId');
-        return res
-          .status(400)
-          .json({ error: 'Missing playerId or tournamentId' });
+        return res.status(400).json({ error: 'Missing playerId or tournamentId' });
       }
 
       if (playerId.startsWith('guest')) {
         console.warn(`⚠️ Guest attempted to register: ${playerId}`);
-        return res
-          .status(403)
-          .json({ error: 'Guests cannot register for tournaments' });
+        return res.status(403).json({ error: 'Guests cannot register for tournaments' });
       }
 
       const tournament = await Tournament.findOne({ id: tournamentId });
@@ -156,9 +141,7 @@ module.exports = function(io) {
       );
       if (alreadyRegistered) {
         console.warn(`⚠️ Player already registered: ${playerId}`);
-        return res
-          .status(400)
-          .json({ error: 'Player already registered' });
+        return res.status(400).json({ error: 'Player already registered' });
       }
 
       tournament.registeredPlayers.push(playerId);
@@ -168,10 +151,7 @@ module.exports = function(io) {
         `🧪 Tournament ${tournament.id} has ${tournament.registeredPlayers.length}/${tournament.maxPlayers} players`
       );
 
-      if (
-        tournament.maxPlayers &&
-        tournament.registeredPlayers.length === tournament.maxPlayers
-      ) {
+      if (tournament.maxPlayers && tournament.registeredPlayers.length === tournament.maxPlayers) {
         const manager = new BracketManager(io, tournament);
         await manager.startRound(tournament.registeredPlayers);
 
@@ -179,14 +159,10 @@ module.exports = function(io) {
         await tournament.save();
       }
 
-      return res
-        .status(200)
-        .json({ message: 'Registered for tournament', tournament });
+      return res.status(200).json({ message: 'Registered for tournament', tournament });
     } catch (err) {
       console.error('❌ Registration error:', err.stack || err.message);
-      return res
-        .status(500)
-        .json({ error: 'Server error during registration' });
+      return res.status(500).json({ error: 'Server error during registration' });
     }
   });
 
@@ -200,6 +176,39 @@ module.exports = function(io) {
     } catch (err) {
       console.error(`❌ Failed to load matches for ${id}:`, err.message);
       res.status(500).json({ error: 'Failed to load matches' });
+    }
+  });
+
+  // ✅ POST /api/tournaments/match-result — record result + award RRP + Tokens
+  router.post('/match-result', async (req, res) => {
+    const { matchId, winnerId, tournamentId } = req.body;
+
+    try {
+      const tournament = await Tournament.findOne({ id: tournamentId });
+      if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+
+      const manager = new BracketManager(io, tournament);
+      await manager.recordResult(matchId, winnerId);
+
+      // 🎁 Reward winner with RRP + Championship Token
+      try {
+        const user = await User.findOne({ username: winnerId });
+        if (user) {
+          user.rrpBalance += 25; // reward amount
+          user.championshipTokens += 1;
+          await user.save();
+          console.log(`✅ ${winnerId} earned 25 RRP and 1 Championship Token (tokens: ${user.championshipTokens})`);
+        } else {
+          console.warn("⚠️ Winner not found in User collection:", winnerId);
+        }
+      } catch (rewardErr) {
+        console.error("❌ Error rewarding RRP/Token:", rewardErr);
+      }
+
+      res.status(200).json({ message: 'Match result recorded', winnerId });
+    } catch (err) {
+      console.error(`❌ Error recording result for ${matchId}:`, err.message);
+      res.status(500).json({ error: 'Failed to record match result' });
     }
   });
 

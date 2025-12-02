@@ -66,8 +66,14 @@ const freerollTemplates = [
 
 async function seedFreerolls() {
   try {
-    await Tournament.insertMany(freerollTemplates);
-    console.log("✅ Seeded Freeroll tournaments (RRP version)");
+    for (const template of freerollTemplates) {
+      await Tournament.updateOne(
+        { id: template.id },   // match by unique id
+        { $set: template },    // update fields if exists
+        { upsert: true }       // insert if not found
+      );
+    }
+    console.log("✅ Seeded/Updated Freeroll tournaments (RRP version)");
   } catch (err) {
     console.error("❌ Error seeding Freerolls:", err);
   }

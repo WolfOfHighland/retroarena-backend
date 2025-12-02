@@ -1,6 +1,7 @@
 const express = require('express');
 const Tournament = require('../models/Tournament');
 const MatchState = require('../models/MatchState');
+const User = require('../models/User'); // ✅ for RRP + Tokens
 const { BracketManager } = require('../utils/bracketManager');
 
 module.exports = function (io) {
@@ -17,7 +18,6 @@ module.exports = function (io) {
       );
       console.log(`🎯 Returning ${filtered.length} scheduled freerolls`);
 
-      // ✅ Enrich response: no entry-fee math, prizeAmount is fixed/sponsor-funded
       const enriched = filtered.map(t => ({
         id: t.id || t._id.toString(),
         name: t.name,
@@ -86,7 +86,6 @@ module.exports = function (io) {
         const manager = new BracketManager(io, tournament);
         await manager.startRound(tournament.registeredPlayers.map((p) => p.id));
 
-        // ✅ Prize pool logic for skill-based freerolls
         tournament.prizeAmount = tournament.prizeAmount || 0;
         tournament.status = 'live';
         await tournament.save();
@@ -108,7 +107,6 @@ module.exports = function (io) {
           elimination: tournament.elimination,
           rom: tournament.rom,
           core: tournament.core,
-          rakePercent: tournament.rakePercent,
         });
 
         await newTournament.save();
@@ -151,7 +149,7 @@ module.exports = function (io) {
     }
   });
 
-  // ✅ POST /freeroll/match-result — record result and advance bracket
+  // ✅ POST /freeroll/match-result — record result + award RRP + Tokens
   router.post('/match-result', async (req, res) => {
     const { matchId, winnerId, tournamentId } = req.body;
 
@@ -163,6 +161,21 @@ module.exports = function (io) {
       const manager = new BracketManager(io, tournament);
       await manager.recordResult(matchId, winnerId);
 
+      // 🎁 Reward winner with RRP + Championship Token
+      try {
+        const user = await User.findOne({ username: winnerId });
+        if (user) {
+          user.rrpBalance += 25; // reward amount
+          user.championshipTokens += 1;
+          await user.save();
+          console.log(`✅ ${winnerId} earned 25 RRP and 1 Championship Token (tokens: ${user.championshipTokens})`);
+        } else {
+          console.warn("⚠️ Winner not found in User collection:", winnerId);
+        }
+      } catch (rewardErr) {
+        console.error("❌ Error rewarding RRP/Token:", rewardErr);
+      }
+
       res.status(200).json({ message: 'Match result recorded', winnerId });
     } catch (err) {
       console.error(`❌ Error recording result for ${matchId}:`, err.message);
@@ -170,7 +183,7 @@ module.exports = function (io) {
     }
   });
 
-  // ✅ GET /freeroll/match/:matchId — fetch matchState by matchId for manual boot
+  // ✅ GET /freeroll/match/:matchId — fetch matchState by matchId
   router.get('/match/:matchId', async (req, res) => {
     const { matchId } = req.params;
 

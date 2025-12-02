@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Tournament = require('../models/Tournament');
 const MatchState = require('../models/MatchState');
+const User = require('../models/User'); // ✅ for RRP + Tokens
 const { BracketManager } = require('../utils/bracketManager');
 
 const getMaxPlayers = (val) => {
@@ -36,9 +37,8 @@ module.exports = function(io) {
           entryFee: t.entryFee,
           registeredPlayers: Array.isArray(t.registeredPlayers) ? t.registeredPlayers : [],
           prizeType: t.prizeType,
-          // ✅ Use stored prizeAmount or default to 0 (no entry-fee math)
           prizeAmount: t.prizeAmount || 0,
-          rakeAmount: 0, // no rake applied in skill-based model
+          rakeAmount: 0,
           game: t.game,
           goalieMode: t.goalieMode,
           elimination: t.elimination,
@@ -100,6 +100,30 @@ module.exports = function(io) {
 
         tournament.status = 'live';
         await tournament.save();
+
+        // ✅ Auto-clone a fresh Sit-n-Go
+        const newTournament = new Tournament({
+          id: `${tournament.id}-clone-${Date.now()}`,
+          name: tournament.name,
+          type: tournament.type || 'sit-n-go',
+          maxPlayers: tournament.maxPlayers,
+          entryFee: tournament.entryFee,
+          prizeType: tournament.prizeType,
+          prizeAmount: tournament.prizeAmount || 0,
+          elimination: tournament.elimination,
+          goalieMode: tournament.goalieMode,
+          periodLength: tournament.periodLength,
+          rom: tournament.rom || 'NHL_95.bin',
+          core: tournament.core || 'genesis_plus_gx',
+          registeredPlayers: [],
+          status: 'scheduled',
+          startTime: null,
+          game: tournament.game,
+          rakePercent: tournament.rakePercent ?? 0.10
+        });
+
+        await newTournament.save();
+        io.emit('tournamentCreated', newTournament);
       }
 
       res.status(200).json({ message: 'Registered', tournament });
@@ -122,7 +146,7 @@ module.exports = function(io) {
         maxPlayers: original.maxPlayers,
         entryFee: original.entryFee,
         prizeType: original.prizeType,
-        prizeAmount: original.prizeAmount || 0, // ✅ carry forward fixed/sponsor prize
+        prizeAmount: original.prizeAmount || 0,
         elimination: original.elimination,
         goalieMode: original.goalieMode,
         periodLength: original.periodLength,
@@ -151,14 +175,12 @@ module.exports = function(io) {
       let updatedCount = 0;
 
       for (const t of tournaments) {
-        // ✅ No entry-fee math; just ensure prizeAmount is set
         const newPrize = t.prizeAmount || 0;
-
         if (t.prizeAmount !== newPrize) {
           t.prizeAmount = newPrize;
           await t.save();
           updatedCount++;
-          console.log(`💰 Updated prize pool for ${t.id} to $${newPrize}`);
+          console.log(`💰 Updated prize pool for ${t.id} to ${newPrize} RRP`);
         }
       }
 
@@ -179,7 +201,7 @@ module.exports = function(io) {
         maxPlayers: 2,
         entryFee: 0,
         prizeType: 'fixed',
-        prizeAmount: 0, // ✅ default to 0 or sponsor-funded
+        prizeAmount: 0,
         elimination: 'single',
         goalieMode: 'auto',
         periodLength: 5,
@@ -201,17 +223,36 @@ module.exports = function(io) {
     }
   });
 
-  // ✅ GET /api/sit-n-go/match/:matchId — fetch matchState
-  router.get('/match/:matchId', async (req, res) => {
-    const { matchId } = req.params;
+   // ✅ POST /api/sit-n-go/match-result — record result + award RRP + Tokens
+  router.post('/match-result', async (req, res) => {
+    const { matchId, winnerId, tournamentId } = req.body;
 
     try {
-      const match = await MatchState.findOne({ matchId });
-      if (!match) return res.status(404).json({ error: 'Match not found' });
-      res.status(200).json(match);
+      const tournament = await Tournament.findOne({ id: tournamentId });
+      if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
+
+      const manager = new BracketManager(io, tournament);
+      await manager.recordResult(matchId, winnerId);
+
+      // 🎁 Reward winner with RRP + Championship Token
+      try {
+        const user = await User.findOne({ username: winnerId });
+        if (user) {
+          user.rrpBalance += 25; // reward amount
+          user.championshipTokens += 1;
+          await user.save();
+          console.log(`✅ ${winnerId} earned 25 RRP and 1 Championship Token (tokens: ${user.championshipTokens})`);
+        } else {
+          console.warn("⚠️ Winner not found in User collection:", winnerId);
+        }
+      } catch (rewardErr) {
+        console.error("❌ Error rewarding RRP/Token:", rewardErr);
+      }
+
+      res.status(200).json({ message: 'Match result recorded', winnerId });
     } catch (err) {
-      console.error(`❌ Failed to fetch match ${matchId}:`, err.message);
-      res.status(500).json({ error: 'Server error' });
+      console.error(`❌ Error recording result for ${matchId}:`, err.message);
+      res.status(500).json({ error: 'Failed to record match result' });
     }
   });
 
