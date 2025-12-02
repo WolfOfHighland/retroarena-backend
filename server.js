@@ -50,6 +50,8 @@ const io = new Server(server, {
 });
 module.exports.io = io;
 const testJoinRoutes = require("./routes/testJoin")(io);
+const leaderboardRoutes = require('./routes/leaderboard')(io);
+
 
 // … rest of your routes …
 
@@ -69,6 +71,7 @@ app.use('/api/freeroll', freerollRoutes(io));
 app.use("/api/freeroll", freerollJoinRoutes(io));
 app.use("/api/dev", freerollRoutes(io));
 app.use("/api", testJoinRoutes);
+app.use('/api', leaderboardRoutes);
 app.use('/webhooks', webhookRoutes);
 console.log('✅ Webhook routes loaded');
 
