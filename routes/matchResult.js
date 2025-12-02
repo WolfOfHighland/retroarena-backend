@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Tournament = require('../models/Tournament');
-const User = require('../models/User');
+const User = require('../models/User'); // ✅ using User model for RRP + Tokens
 const { BracketManager } = require('../utils/bracketManager'); // uses your merged file
 
 module.exports = function(io) {
@@ -25,18 +25,23 @@ module.exports = function(io) {
       const manager = new BracketManager(io, tournament);
       manager.recordResult(matchId, winnerId);
 
-      // 🎁 Reward winner with RRP
+      // 🎁 Reward winner with RRP + Championship Token
       try {
         const user = await User.findOne({ username: winnerId });
         if (user) {
+          // Add RRP
           user.rrpBalance += 25; // reward amount
+
+          // Add Championship Token
+          user.championshipTokens += 1;
+
           await user.save();
-          console.log(`✅ ${winnerId} earned 25 RRP (new balance: ${user.rrpBalance})`);
+          console.log(`✅ ${winnerId} earned 25 RRP and 1 Championship Token (tokens: ${user.championshipTokens})`);
         } else {
           console.warn("⚠️ Winner not found in User collection:", winnerId);
         }
       } catch (rewardErr) {
-        console.error("❌ Error rewarding RRP:", rewardErr);
+        console.error("❌ Error rewarding RRP/Token:", rewardErr);
       }
 
       return res.status(200).json({ message: `Winner recorded for ${matchId}` });
