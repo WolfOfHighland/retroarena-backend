@@ -222,12 +222,12 @@ if (process.env.MONGO_URI) {
       console.error('⚠️ Seeding error:', err);
     }
 
-    // Kick off schedulers
-    emitTournamentSchedule(io);
-    watchSitNGoTables(io);
-  }).catch((err) => {
-    console.error('⚠️ MongoDB connection failed:', err.message);
-  });
+   // Kick off schedulers
+emitTournamentSchedule(io);
+watchSitNGoTables(io);
+}).catch((err) => {
+  console.error('⚠️ MongoDB connection failed:', err.message);
+});
 } else {
   console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
 }
@@ -287,7 +287,6 @@ app.post("/api/freeroll/register/:id", async (req, res) => {
       return res.status(404).json({ error: "Tournament not found" });
     }
 
-    // Add player if not already registered
     if (!tournament.registeredPlayers.includes(playerId)) {
       tournament.registeredPlayers.push(playerId);
       await tournament.save();
@@ -296,7 +295,6 @@ app.post("/api/freeroll/register/:id", async (req, res) => {
     const playersJoined = tournament.registeredPlayers.length;
     const maxPlayers = tournament.maxPlayers || null;
 
-    // ✅ Only return matchId once enough players have joined
     if (maxPlayers && playersJoined >= maxPlayers) {
       return res.json({
         matchId: tournament.id,
@@ -392,7 +390,7 @@ app.post("/api/tournaments/join/:id", async (req, res) => {
   }
 });
 
-// ✅ Start match route (unchanged except formatting)
+// ✅ Start match route with netplay wiring
 app.post("/start-match", async (req, res) => {
   const { tournamentId, rom, core } = req.body;
 
@@ -413,18 +411,24 @@ app.post("/start-match", async (req, res) => {
       goalieMode: tournament.goalieMode || "manual",
       periodLength: tournament.periodLength || 5,
       matchId: tournamentId,
+      tournamentId,
     };
 
     await saveMatchState(tournamentId, matchState);
 
     // ✅ Delay emit to ensure sockets join rooms
     setTimeout(() => {
-      for (const playerId of tournament.registeredPlayers || []) {
-        const launchUrl = `https://www.retrorumblearena.com/Retroarch-Browser/index.html?core=${core}&rom=${rom}&matchId=${tournamentId}`;
-        console.log(`🧪 Preparing to emit launchEmulator to ${playerId}`);
-        io.to(playerId).emit("launchEmulator", { matchId: tournamentId, launchUrl });
-        console.log(`📡 Emitted launchEmulator to ${playerId}: ${launchUrl}`);
-      }
+      const players = tournament.registeredPlayers || [];
+      players.forEach((playerId, index) => {
+        const payload = {
+          ...matchState,
+          netplayMode: index === 0 ? "host" : "client",
+          netplayHost: index === 0 ? undefined : "wss://retroarena-backend.onrender.com:55435",
+          playerName: playerId,
+        };
+        io.to(playerId).emit("matchStart", payload);
+        console.log(`📡 Emitted matchStart with netplay to ${playerId}`, payload);
+      });
 
       io.to(tournamentId).emit("matchStart", matchState);
       console.log(`📡 Emitted matchStart to room ${tournamentId}`);
