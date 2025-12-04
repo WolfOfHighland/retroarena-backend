@@ -98,9 +98,9 @@ if (process.env.MONGO_URI) {
   .then(async () => {
     console.log('✅ Connected to MongoDB');
 
-    // Clean up any past tournaments that never filled
+    // Clean up only tournaments older than 24 hours
     await Tournament.deleteMany({
-      startTime: { $lt: new Date() },
+      startTime: { $lt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
       registeredPlayers: []
     });
 
