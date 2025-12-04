@@ -89,40 +89,38 @@ if (process.env.REDIS_URL) {
   console.log('⚠️ No REDIS_URL provided — skipping Redis adapter');
 }
 
-// ✅ MongoDB setup
 if (process.env.MONGO_URI) {
-  mongoose.connect(process.env.MONGO_URI, { dbName: 'retro_rumble' })
-    .then(async () => {
-      console.log('✅ Connected to MongoDB');
+  mongoose.connect(process.env.MONGO_URI, {
+    dbName: 'retro_rumble',
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(async () => {
+    console.log('✅ Connected to MongoDB');
 
-      // Clean up any past tournaments that never filled
-      await Tournament.deleteMany({
-        startTime: { $lt: new Date() },
-        registeredPlayers: []
-      });
-
-      // Seed scripts
-      try {
-        await seedOpeningDay();
-        await seedSitNGo();
-        await seedFreerolls();
-        console.log('✅ Seeding complete');
-      } catch (err) {
-        console.error('⚠️ Seeding error:', err);
-      }
-    })
-    .catch((err) => {
-      console.error('⚠️ MongoDB connection failed:', err.message);
+    // Clean up any past tournaments that never filled
+    await Tournament.deleteMany({
+      startTime: { $lt: new Date() },
+      registeredPlayers: []
     });
-} else {
-  console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
-}
-   // Kick off schedulers
-emitTournamentSchedule(io);
-watchSitNGoTables(io);
-}).catch((err) => {
-  console.error('⚠️ MongoDB connection failed:', err.message);
-});
+
+    // Seed scripts
+    try {
+      await seedOpeningDay();
+      await seedSitNGo();
+      await seedFreerolls();
+      console.log('✅ Seeding complete');
+    } catch (err) {
+      console.error('⚠️ Seeding error:', err);
+    }
+
+    // Kick off schedulers
+    emitTournamentSchedule(io);
+    watchSitNGoTables(io);
+  })
+  .catch((err) => {
+    console.error('⚠️ MongoDB connection failed:', err.message);
+  });
 } else {
   console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
 }
