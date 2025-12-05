@@ -43,7 +43,7 @@ module.exports = function(io) {
           goalieMode: t.goalieMode,
           elimination: t.elimination,
           maxPlayers: getMaxPlayers(t.maxPlayers),
-          status: t.status || 'scheduled'
+          status: t.status || 'open'   // ✅ default to open if missing
         };
       });
 
@@ -116,8 +116,8 @@ module.exports = function(io) {
           rom: tournament.rom || 'NHL_95.bin',
           core: tournament.core || 'genesis_plus_gx',
           registeredPlayers: [],
-          status: 'scheduled',
-          startTime: null,
+          status: 'open',        // ✅ visible immediately
+          startTime: null,       // ✅ sit-n-go starts when full
           game: tournament.game,
           rakePercent: tournament.rakePercent ?? 0.10
         });
@@ -153,7 +153,7 @@ module.exports = function(io) {
         rom: original.rom || 'NHL_95.bin',
         core: original.core || 'genesis_plus_gx',
         registeredPlayers: [],
-        status: 'scheduled',
+        status: 'open',        // ✅ visible immediately
         startTime: null,
         game: original.game,
         rakePercent: original.rakePercent ?? 0.10
@@ -208,7 +208,7 @@ module.exports = function(io) {
         rom: 'NHL_95.bin',
         core: 'genesis_plus_gx',
         registeredPlayers: [],
-        status: 'scheduled',
+        status: 'open',        // ✅ visible immediately
         startTime: null,
         game: 'NHL 95',
         rakePercent: 0.10

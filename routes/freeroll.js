@@ -7,16 +7,18 @@ const { BracketManager } = require('../utils/bracketManager');
 module.exports = function (io) {
   const router = express.Router();
 
-  // ✅ GET /freeroll — fetch scheduled freeroll tournaments
+  // ✅ GET /freeroll — fetch available freeroll tournaments
   router.get('/', async (req, res) => {
     try {
+      // Pull all freerolls
       const all = await Tournament.find({ type: 'freeroll' });
       console.log(`📦 Found ${all.length} freeroll tournaments total`);
 
+      // Include both "open" and "scheduled" so lobby isn't bare
       const filtered = all.filter(
-        (t) => t.entryFee === 0 && t.status === 'scheduled'
+        (t) => t.entryFee === 0 && (t.status === 'open' || t.status === 'scheduled')
       );
-      console.log(`🎯 Returning ${filtered.length} scheduled freerolls`);
+      console.log(`🎯 Returning ${filtered.length} freerolls (open/scheduled)`);
 
       const enriched = filtered.map(t => ({
         id: t.id || t._id.toString(),
@@ -97,7 +99,7 @@ module.exports = function (io) {
           game: tournament.game,
           goalieMode: tournament.goalieMode,
           periodLength: tournament.periodLength,
-          status: 'scheduled',
+          status: 'open', // ✅ make clones visible immediately
           type: tournament.type,
           registeredPlayers: [],
           entryFee: tournament.entryFee,

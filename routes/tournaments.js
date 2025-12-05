@@ -8,57 +8,50 @@ module.exports = function(io) {
   const router = express.Router();
 
   // ✅ GET /api/tournaments — fetch scheduled tournaments
-  router.get('/', async (_req, res) => {
-    try {
-      const tournaments = await Tournament.find({
-        type: 'scheduled',
-        status: 'scheduled'
-      });
+router.get('/', async (_req, res) => {
+  try {
+    const tournaments = await Tournament.find({
+      type: 'scheduled',
+      status: { $in: ['scheduled', 'open'] }   // include open tournaments
+    });
 
-      console.log(
-        '🧪 Raw tournaments from DB:',
-        tournaments.map(t => ({
-          id: t.id,
-          type: t.type,
-          startTime: t.startTime
-        }))
-      );
+    console.log(
+      '🧪 Raw tournaments from DB:',
+      tournaments.map(t => ({
+        id: t.id,
+        type: t.type,
+        startTime: t.startTime,
+        status: t.status
+      }))
+    );
 
-      const enriched = tournaments.map(t => {
-        const entryFee = t.entryFee ?? 0;
-        const maxPlayers =
-          typeof t.maxPlayers === 'number' && !isNaN(t.maxPlayers)
-            ? t.maxPlayers
-            : undefined;
+    const enriched = tournaments.map(t => ({
+      id: t.id || t._id.toString(),
+      name: t.name,
+      entryFee: t.entryFee ?? 0,
+      registeredPlayers: Array.isArray(t.registeredPlayers)
+        ? t.registeredPlayers
+        : [],
+      maxPlayers: typeof t.maxPlayers === 'number' && !isNaN(t.maxPlayers)
+        ? t.maxPlayers
+        : undefined,
+      prizeType: t.prizeType ?? 'fixed',
+      prizeAmount: t.prizeAmount || 0,
+      rakePercent: 0,
+      rakeAmount: 0,
+      game: t.game,
+      goalieMode: t.goalieMode,
+      elimination: t.elimination,
+      status: t.status || 'scheduled',
+      startTime: t.startTime
+    }));
 
-        const prizeAmount = t.prizeAmount || 0;
-
-        return {
-          id: t.id || t._id.toString(),
-          name: t.name,
-          entryFee,
-          registeredPlayers: Array.isArray(t.registeredPlayers)
-            ? t.registeredPlayers
-            : [],
-          maxPlayers,
-          prizeType: t.prizeType ?? 'fixed',
-          prizeAmount,
-          rakePercent: 0,
-          rakeAmount: 0,
-          game: t.game,
-          goalieMode: t.goalieMode,
-          elimination: t.elimination,
-          status: t.status || 'scheduled',
-          startTime: t.startTime
-        };
-      });
-
-      res.status(200).json(enriched);
-    } catch (err) {
-      console.error('❌ Failed to fetch tournaments:', err.message);
-      res.status(500).json({ error: 'Server error' });
-    }
-  });
+    res.status(200).json(enriched);
+  } catch (err) {
+    console.error('❌ Failed to fetch tournaments:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
   // ✅ POST /api/tournaments/create — create and launch tournament
   router.post('/create', async (req, res) => {
