@@ -30,11 +30,14 @@ const TournamentSchema = new mongoose.Schema({
     default: []
   },
 
+  // ✅ Always seed with 3 lobbies
+  lobbies: {
+    type: [[mongoose.Schema.Types.Mixed]],
+    default: [[], [], []]
+  },
+
   // ✅ No entry fees in skill-based model
   entryFee: { type: Number, default: 0 },
-
-  // ✅ Removed rakePercent entirely (poker-era)
-  // rakePercent: { type: Number, default: 0.10 },
 
   maxPlayers: { type: Number },
 
