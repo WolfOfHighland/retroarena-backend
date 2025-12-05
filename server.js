@@ -100,9 +100,9 @@ if (process.env.MONGO_URI) {
 
     // Only clean up scheduled tournaments that are truly expired
 await Tournament.deleteMany({
-  type: "tournament",              // scheduled tournaments only
+  type: "scheduled",               // match your seeder type
   startTime: { $lt: new Date() },  // past start times
-  registeredPlayers: []
+  registeredPlayers: []            // no players
 });
 
     // Seed scripts
