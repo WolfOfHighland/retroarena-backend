@@ -99,18 +99,34 @@ if (process.env.MONGO_URI) {
     console.log('✅ Connected to MongoDB');
 
     // Only clean up scheduled tournaments that are truly expired
-await Tournament.deleteMany({
-  type: "scheduled",               // match your seeder type
-  startTime: { $lt: new Date() },  // past start times
-  registeredPlayers: []            // no players
-});
+    await Tournament.deleteMany({
+      type: "scheduled",               // match your seeder type
+      startTime: { $lt: new Date() },  // past start times
+      registeredPlayers: []            // no players
+    });
 
     // Seed scripts
     try {
       await seedOpeningDay();
       await seedSitNGo();
       await seedFreerolls();
-      console.log('✅ Seeding complete');
+
+      // ✅ Restore 3-lobby distribution for seeded tournaments
+      const tournaments = await Tournament.find({ type: { $in: ["scheduled", "sitngo", "freeroll"] } });
+      for (const t of tournaments) {
+        if (!t.lobbies || t.lobbies.length === 0) {
+          const lobbies = [[], [], []];
+          t.registeredPlayers.forEach((player, idx) => {
+            const lobbyIndex = idx % 3; // round-robin split
+            lobbies[lobbyIndex].push(player);
+          });
+          t.lobbies = lobbies;
+          await t.save();
+          console.log(`✅ Tournament ${t._id} seeded into 3 lobbies`);
+        }
+      }
+
+      console.log('✅ Seeding complete with lobby distribution');
     } catch (err) {
       console.error('⚠️ Seeding error:', err);
     }
