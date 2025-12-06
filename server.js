@@ -100,17 +100,28 @@ if (process.env.MONGO_URI) {
 
     // Only clean up scheduled tournaments that are truly expired
     await Tournament.deleteMany({
-      type: "scheduled",               // match your seeder type
-      startTime: { $lt: new Date() },  // past start times
-      registeredPlayers: []            // no players
+      type: "scheduled",
+      startTime: { $lt: new Date() },
+      registeredPlayers: []
     });
 
-    // Seed scripts (each seeder defines its own lobbies)
+    // Seed scripts
     try {
       await seedOpeningDay();
       await seedSitNGo();
       await seedFreerolls();
-      console.log('✅ Seeding complete (per-seeder lobby logic)');
+
+      // ✅ Guarantee 3 lobbies exist for every tournament
+      const tournaments = await Tournament.find({});
+      for (const t of tournaments) {
+        if (!t.lobbies || t.lobbies.length !== 3) {
+          t.lobbies = [[], [], []];
+          await t.save();
+          console.log(`✅ Tournament ${t.id} ensured 3 lobbies`);
+        }
+      }
+
+      console.log('✅ Seeding complete with persistent lobbies');
     } catch (err) {
       console.error('⚠️ Seeding error:', err);
     }
@@ -126,7 +137,7 @@ if (process.env.MONGO_URI) {
   console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
 }
 
-app.post('/register-player', async (req, res) => {
+0app.post('/register-player', async (req, res) => {
   const { username, email, country, socketId } = req.body;
   if (!username?.trim() || !email?.trim()) {
     return res.status(400).json({ error: 'Missing required fields' });
