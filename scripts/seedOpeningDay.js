@@ -36,6 +36,9 @@ async function seedOpeningDay() {
 
         registeredPlayers: [],
 
+        // ✅ Persistent lobbies
+        lobbies: [[], [], []],
+
         // ✅ Fixed RRP prize model
         prizeType: "fixed",
 
@@ -43,7 +46,7 @@ async function seedOpeningDay() {
         // Example: 900, 1800, 2700, ... 7200
         prizeAmount: (i + 1) * 900,
 
-        // ✅ Optional: add ROM/core if needed for consistency
+        // ✅ Consistency with ROM/core
         rom: "NHL_95.bin",
         core: "genesis_plus_gx",
       };
@@ -53,7 +56,7 @@ async function seedOpeningDay() {
 
     await Tournament.deleteMany({ id: /opening-day-/ });
     await Tournament.insertMany(tournaments);
-    console.log("✅ Seeded 8 Opening Day tournaments (RRP version)");
+    console.log("✅ Seeded 8 Opening Day tournaments (RRP version with lobbies)");
   } catch (err) {
     console.error("❌ Seed failed:", err);
   } finally {

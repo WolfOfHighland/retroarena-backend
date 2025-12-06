@@ -11,6 +11,7 @@ mongoose.connect(process.env.MONGO_URI, {
 // ✅ No entry fees, no rake, no dynamic prize logic
 // ✅ prizeType = "fixed"
 // ✅ prizeAmount = RRP value
+// ✅ Always include lobbies: [[],[],[]]
 
 const sitngoTemplates = [
   {
@@ -25,6 +26,7 @@ const sitngoTemplates = [
     prizeType: "fixed",
     prizeAmount: 900,       // ✅ 900 RRP
     registeredPlayers: [],
+    lobbies: [[], [], []],  // ✅ persistent lobbies
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "sit-n-go",
@@ -43,6 +45,7 @@ const sitngoTemplates = [
     prizeType: "fixed",
     prizeAmount: 3600,      // ✅ 3600 RRP
     registeredPlayers: [],
+    lobbies: [[], [], []],  // ✅ persistent lobbies
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "sit-n-go",
@@ -61,6 +64,7 @@ const sitngoTemplates = [
     prizeType: "fixed",
     prizeAmount: 18000,     // ✅ 18,000 RRP
     registeredPlayers: [],
+    lobbies: [[], [], []],  // ✅ persistent lobbies
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "sit-n-go",
@@ -73,7 +77,7 @@ async function seedSitNGo() {
   try {
     await Tournament.deleteMany({ type: "sit-n-go" }); // ✅ Clean old sit‑n‑gos
     await Tournament.insertMany(sitngoTemplates);
-    console.log("✅ Seeded Sit‑n‑Go templates (RRP version)");
+    console.log("✅ Seeded Sit‑n‑Go templates (RRP version with lobbies)");
   } catch (err) {
     console.error("❌ Error seeding Sit‑n‑Go:", err);
   }

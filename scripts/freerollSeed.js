@@ -6,6 +6,7 @@ const Tournament = require("../models/Tournament");
 // ✅ No dollars, no rake, no dynamic prize logic
 // ✅ prizeType = "fixed"
 // ✅ prizeAmount = RRP value
+// ✅ Always include lobbies: [[],[],[]]
 
 const freerollTemplates = [
   {
@@ -20,6 +21,7 @@ const freerollTemplates = [
     prizeType: "fixed",
     prizeAmount: 900, // ✅ 900 RRP
     registeredPlayers: [],
+    lobbies: [[], [], []],   // ✅ persistent lobbies
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "freeroll",
@@ -38,6 +40,7 @@ const freerollTemplates = [
     prizeType: "fixed",
     prizeAmount: 3600, // ✅ 3600 RRP
     registeredPlayers: [],
+    lobbies: [[], [], []],   // ✅ persistent lobbies
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "freeroll",
@@ -56,6 +59,7 @@ const freerollTemplates = [
     prizeType: "fixed",
     prizeAmount: 18000, // ✅ 18,000 RRP
     registeredPlayers: [],
+    lobbies: [[], [], []],   // ✅ persistent lobbies
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "freeroll",
@@ -73,7 +77,7 @@ async function seedFreerolls() {
         { upsert: true }       // insert if not found
       );
     }
-    console.log("✅ Seeded/Updated Freeroll tournaments (RRP version)");
+    console.log("✅ Seeded/Updated Freeroll tournaments (RRP version with lobbies)");
   } catch (err) {
     console.error("❌ Error seeding Freerolls:", err);
   }
