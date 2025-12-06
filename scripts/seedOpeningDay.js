@@ -11,16 +11,14 @@ async function seedOpeningDay() {
       });
     }
 
-    // ✅ Push start times 1 hour into the future
+    // ✅ Start times 1 hour in the future, hourly slots
     const baseDate = new Date(Date.now() + 60 * 60 * 1000);
     baseDate.setMinutes(0, 0, 0);
 
-    const tournaments = [];
-
+    const payloads = [];
     for (let i = 0; i < 8; i++) {
       const start = new Date(baseDate.getTime() + i * 60 * 60 * 1000);
-
-      const tournament = {
+      payloads.push({
         id: `opening-day-${i + 1}`,
         name: `Opening Day ${i + 1}`,
         startTime: start,
@@ -30,33 +28,29 @@ async function seedOpeningDay() {
         status: "scheduled",
         type: "scheduled",
         elimination: i === 7 ? "double" : "single",
-
-        // ✅ No entry fees in skill‑based model
         entryFee: 0,
-
         registeredPlayers: [],
-
-        // ✅ Persistent lobbies
-        lobbies: [[], [], []],
-
-        // ✅ Fixed RRP prize model
         prizeType: "fixed",
-
-        // ✅ RRP scaling (same pattern as freerolls/sit‑n‑gos)
-        // Example: 900, 1800, 2700, ... 7200
         prizeAmount: (i + 1) * 900,
-
-        // ✅ Consistency with ROM/core
         rom: "NHL_95.bin",
         core: "genesis_plus_gx",
-      };
-
-      tournaments.push(tournament);
+      });
     }
 
-    await Tournament.deleteMany({ id: /opening-day-/ });
-    await Tournament.insertMany(tournaments);
-    console.log("✅ Seeded 8 Opening Day tournaments (RRP version with lobbies)");
+    // Upsert all with lobbies only on insert
+    const ops = payloads.map((t) => ({
+      updateOne: {
+        filter: { id: t.id },
+        update: {
+          $set: t,
+          $setOnInsert: { lobbies: [[], [], []] }
+        },
+        upsert: true,
+      }
+    }));
+
+    await Tournament.bulkWrite(ops, { ordered: false });
+    console.log("✅ Seeded/Updated 8 Opening Day tournaments with persistent lobbies");
   } catch (err) {
     console.error("❌ Seed failed:", err);
   } finally {
@@ -66,10 +60,8 @@ async function seedOpeningDay() {
   }
 }
 
-// ✅ Export for server.js
 module.exports = seedOpeningDay;
 
-// ✅ Run directly if invoked via CLI
 if (require.main === module) {
   seedOpeningDay().then(() => process.exit(0));
 }

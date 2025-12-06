@@ -7,12 +7,7 @@ mongoose.connect(process.env.MONGO_URI, {
   useUnifiedTopology: true,
 });
 
-// ✅ Sit‑n‑Go tournaments now use RRP (Retro Rumble Points)
-// ✅ No entry fees, no rake, no dynamic prize logic
-// ✅ prizeType = "fixed"
-// ✅ prizeAmount = RRP value
-// ✅ Always include lobbies: [[],[],[]]
-
+// ✅ RRP fixed prizes, zero entry fee
 const sitngoTemplates = [
   {
     id: "sitngo-auto-2",
@@ -22,11 +17,10 @@ const sitngoTemplates = [
     goalieMode: "auto",
     elimination: "single",
     maxPlayers: 2,
-    entryFee: 0,            // ✅ No buy‑ins
+    entryFee: 0,
     prizeType: "fixed",
-    prizeAmount: 900,       // ✅ 900 RRP
+    prizeAmount: 900,
     registeredPlayers: [],
-    lobbies: [[], [], []],  // ✅ persistent lobbies
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "sit-n-go",
@@ -43,9 +37,8 @@ const sitngoTemplates = [
     maxPlayers: 4,
     entryFee: 0,
     prizeType: "fixed",
-    prizeAmount: 3600,      // ✅ 3600 RRP
+    prizeAmount: 3600,
     registeredPlayers: [],
-    lobbies: [[], [], []],  // ✅ persistent lobbies
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "sit-n-go",
@@ -62,9 +55,8 @@ const sitngoTemplates = [
     maxPlayers: 10,
     entryFee: 0,
     prizeType: "fixed",
-    prizeAmount: 18000,     // ✅ 18,000 RRP
+    prizeAmount: 18000,
     registeredPlayers: [],
-    lobbies: [[], [], []],  // ✅ persistent lobbies
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "sit-n-go",
@@ -75,9 +67,20 @@ const sitngoTemplates = [
 
 async function seedSitNGo() {
   try {
-    await Tournament.deleteMany({ type: "sit-n-go" }); // ✅ Clean old sit‑n‑gos
-    await Tournament.insertMany(sitngoTemplates);
-    console.log("✅ Seeded Sit‑n‑Go templates (RRP version with lobbies)");
+    const ops = sitngoTemplates.map((template) => ({
+      updateOne: {
+        filter: { id: template.id },
+        update: {
+          $set: template,
+          // ✅ Guarantee 3 lobbies only on insert
+          $setOnInsert: { lobbies: [[], [], []] }
+        },
+        upsert: true
+      }
+    }));
+
+    await Tournament.bulkWrite(ops, { ordered: false });
+    console.log("✅ Seeded/Updated Sit‑n‑Go templates with persistent lobbies");
   } catch (err) {
     console.error("❌ Error seeding Sit‑n‑Go:", err);
   }

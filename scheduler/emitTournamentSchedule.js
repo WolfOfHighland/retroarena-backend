@@ -34,24 +34,24 @@ async function emitTournamentSchedule(io) {
     }).lean();
 
     const visible = today.map((t) => {
-      const start = new Date(t.startTime).getTime();
+      const start = t.startTime ? new Date(t.startTime).getTime() : Infinity;
       return {
         id: t._id,
         tournamentId: t.id,
         name: t.name,
         startTime: t.startTime,
-        localTime: formatTimeEDT(t.startTime),
+        localTime: t.startTime ? formatTimeEDT(t.startTime) : "—",
         game: t.game,
         prizePool: t.prizeAmount,
         status: t.status,
         buyIn: t.entryFee || 0,
-        players: t.registeredPlayers?.length || 0,
+        players: Array.isArray(t.registeredPlayers) ? t.registeredPlayers.length : 0,
         elimination: t.elimination,
         isLive: t.status === "live",
         hasStarted: start <= now,
         romUrl: t.romUrl || "https://www.retrorumblearena.com/roms/NHL_95.bin",
-        // ✅ Always include lobbies
-        lobbies: t.lobbies && t.lobbies.length === 3 ? t.lobbies : [[], [], []],
+        // ✅ Always include 3 lobbies (fallback ensures visibility)
+        lobbies: Array.isArray(t.lobbies) && t.lobbies.length === 3 ? t.lobbies : [[], [], []],
         registeredPlayers: t.registeredPlayers || [],
       };
     });
@@ -59,7 +59,7 @@ async function emitTournamentSchedule(io) {
     if (visible.length === 0) {
       visible.push({
         id: "dummy",
-        tournamentId: "freeroll-placeholder",
+        tournamentId: "placeholder",
         name: "No tournaments today",
         startTime: null,
         localTime: "—",
@@ -87,7 +87,7 @@ async function emitTournamentSchedule(io) {
 function watchSitNGoTables(io) {
   console.log("👀 watchSitNGoTables activated");
 
-  const pollInterval = 30000; // every 30 seconds
+  const pollInterval = 30000;
 
   setInterval(async () => {
     try {
@@ -103,7 +103,7 @@ function watchSitNGoTables(io) {
             tournamentId: t.id,
             name: t.name,
             players: t.registeredPlayers || [],
-            lobbies: t.lobbies && t.lobbies.length === 3 ? t.lobbies : [[], [], []],
+            lobbies: Array.isArray(t.lobbies) && t.lobbies.length === 3 ? t.lobbies : [[], [], []],
             matchState: state || null,
           };
         })
@@ -117,13 +117,7 @@ function watchSitNGoTables(io) {
   }, pollInterval);
 }
 
-function scheduleAllTournaments(io) {
-  console.log("⏰ scheduleAllTournaments placeholder triggered");
-  // Future logic for timed matchStart emits can go here
-}
-
 module.exports = {
   emitTournamentSchedule,
-  scheduleAllTournaments,
   watchSitNGoTables,
 };

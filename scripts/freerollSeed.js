@@ -2,12 +2,7 @@ require("dotenv").config();
 const mongoose = require("mongoose");
 const Tournament = require("../models/Tournament");
 
-// ✅ Freerolls now use RRP (Retro Rumble Points)
-// ✅ No dollars, no rake, no dynamic prize logic
-// ✅ prizeType = "fixed"
-// ✅ prizeAmount = RRP value
-// ✅ Always include lobbies: [[],[],[]]
-
+// ✅ Freerolls use RRP, fixed prize, zero entry fee
 const freerollTemplates = [
   {
     id: "freeroll-auto-2",
@@ -19,9 +14,8 @@ const freerollTemplates = [
     maxPlayers: 2,
     entryFee: 0,
     prizeType: "fixed",
-    prizeAmount: 900, // ✅ 900 RRP
+    prizeAmount: 900,
     registeredPlayers: [],
-    lobbies: [[], [], []],   // ✅ persistent lobbies
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "freeroll",
@@ -38,9 +32,8 @@ const freerollTemplates = [
     maxPlayers: 4,
     entryFee: 0,
     prizeType: "fixed",
-    prizeAmount: 3600, // ✅ 3600 RRP
+    prizeAmount: 3600,
     registeredPlayers: [],
-    lobbies: [[], [], []],   // ✅ persistent lobbies
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "freeroll",
@@ -57,9 +50,8 @@ const freerollTemplates = [
     maxPlayers: 10,
     entryFee: 0,
     prizeType: "fixed",
-    prizeAmount: 18000, // ✅ 18,000 RRP
+    prizeAmount: 18000,
     registeredPlayers: [],
-    lobbies: [[], [], []],   // ✅ persistent lobbies
     rom: "NHL_95.bin",
     core: "genesis_plus_gx",
     type: "freeroll",
@@ -70,14 +62,20 @@ const freerollTemplates = [
 
 async function seedFreerolls() {
   try {
-    for (const template of freerollTemplates) {
-      await Tournament.updateOne(
-        { id: template.id },   // match by unique id
-        { $set: template },    // update fields if exists
-        { upsert: true }       // insert if not found
-      );
-    }
-    console.log("✅ Seeded/Updated Freeroll tournaments (RRP version with lobbies)");
+    const ops = freerollTemplates.map((template) => ({
+      updateOne: {
+        filter: { id: template.id },
+        update: {
+          $set: template,
+          // ✅ Guarantee 3 lobbies only on insert (doesn't wipe existing)
+          $setOnInsert: { lobbies: [[], [], []] }
+        },
+        upsert: true
+      }
+    }));
+
+    await Tournament.bulkWrite(ops, { ordered: false });
+    console.log("✅ Seeded/Updated Freeroll tournaments with persistent lobbies");
   } catch (err) {
     console.error("❌ Error seeding Freerolls:", err);
   }
