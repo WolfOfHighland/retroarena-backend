@@ -137,7 +137,7 @@ if (process.env.MONGO_URI) {
   console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
 }
 
-0app.post('/register-player', async (req, res) => {
+app.post('/register-player', async (req, res) => {
   const { username, email, country, socketId } = req.body;
   if (!username?.trim() || !email?.trim()) {
     return res.status(400).json({ error: 'Missing required fields' });
