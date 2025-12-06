@@ -122,13 +122,14 @@ async function watchSitNGoTables(io) {
       }).lean();
 
       const visible = sitngos.map((t) => ({
-        id: t._id,
-        name: t.name,
-        buyIn: t.entryFee,
-        players: t.registeredPlayers?.length || 0,
-        prizePool: t.prizeAmount,
-        game: t.game,
-      }));
+  id: t._id,
+  name: t.name,
+  buyIn: t.entryFee,
+  players: t.registeredPlayers?.length || 0,
+  prizePool: t.prizeAmount,
+  game: t.game,
+  lobbies: t.lobbies || [[], [], []],  // ✅ include lobbies
+}));
 
       if (visible.length === 0) {
         visible.push({
@@ -161,20 +162,21 @@ async function watchSitNGoTables(io) {
           console.log(`🚀 Emitted matchStart for Sit‑n‑Go "${updated.name}" (${updated._id})`);
 
           const clone = new Tournament({
-            id: `${updated.id}-clone-${Date.now()}`,
-            name: updated.name,
-            startTime: null,
-            game: updated.game,
-            goalieMode: updated.goalieMode,
-            elimination: updated.elimination,
-            maxPlayers: updated.maxPlayers,
-            entryFee: updated.entryFee,
-            prizeType: updated.prizeType,
-            prizeAmount: 0,
-            registeredPlayers: [],
-            status: "scheduled",
-            type: "sit-n-go",
-          });
+  id: `${updated.id}-clone-${Date.now()}`,
+  name: updated.name,
+  startTime: null,
+  game: updated.game,
+  goalieMode: updated.goalieMode,
+  elimination: updated.elimination,
+  maxPlayers: updated.maxPlayers,
+  entryFee: updated.entryFee,
+  prizeType: updated.prizeType,
+  prizeAmount: 0,
+  registeredPlayers: [],
+  lobbies: [[], [], []],   // ✅ ensure persistent lobbies
+  status: "scheduled",
+  type: "sit-n-go",
+});
 
           await clone.save();
           console.log(`🔁 Respawned Sit‑n‑Go: ${clone.name} (${clone._id})`);

@@ -16,7 +16,7 @@ const seedOpeningDay = require('./scripts/seedOpeningDay');
 const seedSitNGo = require('./scripts/seedSitNGo');
 const seedFreerolls = require('./scripts/freerollSeed');
 const { saveMatchState, loadMatchState, setRedis } = require('./utils/matchState');
-const { emitTournamentSchedule, scheduleAllTournaments, watchSitNGoTables } = require('./scheduler/emitTournamentSchedule');
+const { emitTournamentSchedule, watchSitNGoTables } = require('./scheduler/emitTournamentSchedule');
 
 const Player = require('./models/Player');
 const Tournament = require('./models/Tournament');
@@ -48,7 +48,7 @@ app.use(express.json());
 
 const server = http.createServer(app);
 
-// ✅ Socket.IO CORS config (no regex here, just explicit list)
+// ✅ Socket.IO CORS config
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
@@ -98,7 +98,7 @@ if (process.env.MONGO_URI) {
   .then(async () => {
     console.log('✅ Connected to MongoDB');
 
-    // Only clean up scheduled tournaments that are truly expired
+    // Clean up expired scheduled tournaments
     await Tournament.deleteMany({
       type: "scheduled",
       startTime: { $lt: new Date() },
@@ -127,7 +127,7 @@ if (process.env.MONGO_URI) {
     }
 
     // Kick off schedulers
-    emitTournamentSchedule(io);
+    emitTournamentSchedule(io); // ✅ always emits tournaments, even if empty
     watchSitNGoTables(io);
   })
   .catch((err) => {

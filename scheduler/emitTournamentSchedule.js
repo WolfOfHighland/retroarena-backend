@@ -50,6 +50,9 @@ async function emitTournamentSchedule(io) {
         isLive: t.status === "live",
         hasStarted: start <= now,
         romUrl: t.romUrl || "https://www.retrorumblearena.com/roms/NHL_95.bin",
+        // ✅ Always include lobbies
+        lobbies: t.lobbies && t.lobbies.length === 3 ? t.lobbies : [[], [], []],
+        registeredPlayers: t.registeredPlayers || [],
       };
     });
 
@@ -69,6 +72,8 @@ async function emitTournamentSchedule(io) {
         isLive: false,
         hasStarted: false,
         romUrl: null,
+        lobbies: [[], [], []],
+        registeredPlayers: [],
       });
     }
 
@@ -98,6 +103,7 @@ function watchSitNGoTables(io) {
             tournamentId: t.id,
             name: t.name,
             players: t.registeredPlayers || [],
+            lobbies: t.lobbies && t.lobbies.length === 3 ? t.lobbies : [[], [], []],
             matchState: state || null,
           };
         })
