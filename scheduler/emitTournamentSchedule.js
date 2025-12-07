@@ -20,38 +20,43 @@ function formatTimeEDT(date) {
 async function emitTournamentSchedule(io) {
   console.log("📡 emitTournamentSchedule triggered");
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-
-  const endOfDay = new Date();
-  endOfDay.setHours(23, 59, 59, 999);
-
-  const now = Date.now();
-
   try {
-    const today = await Tournament.find({
-      startTime: { $gte: startOfDay, $lte: endOfDay },
-    }).lean();
+    // ✅ Pull all tournaments, not just today's
+    const tournaments = await Tournament.find({}).lean();
 
-    const visible = today.map((t) => {
+    const visible = tournaments.map((t) => {
       const start = t.startTime ? new Date(t.startTime).getTime() : Infinity;
       return {
         id: t._id,
         tournamentId: t.id,
         name: t.name,
-        startTime: t.startTime,
-        localTime: t.startTime ? formatTimeEDT(t.startTime) : "—",
+        type: t.type, // scheduled | sit-n-go | freeroll
+        startTime: t.type === "scheduled" ? t.startTime : null,
+        localTime:
+          t.type === "scheduled" && t.startTime ? formatTimeEDT(t.startTime) : "—",
         game: t.game,
         prizePool: t.prizeAmount,
-        status: t.status,
+        status: t.status || "waiting",
         buyIn: t.entryFee || 0,
-        players: Array.isArray(t.registeredPlayers) ? t.registeredPlayers.length : 0,
+        players: Array.isArray(t.registeredPlayers)
+          ? t.registeredPlayers.length
+          : 0,
         elimination: t.elimination,
         isLive: t.status === "live",
-        hasStarted: start <= now,
-        romUrl: t.romUrl || "https://www.retrorumblearena.com/roms/NHL_95.bin",
-        // ✅ Always include 3 lobbies (fallback ensures visibility)
-        lobbies: Array.isArray(t.lobbies) && t.lobbies.length === 3 ? t.lobbies : [[], [], []],
+        hasStarted:
+          t.type === "scheduled"
+            ? start <= Date.now()
+            : t.registeredPlayers.length >= (t.maxPlayers || 0),
+        romUrl:
+          t.romUrl ||
+          "https://www.retrorumblearena.com/roms/NHL_95.bin",
+        // ✅ Emit lobby objects, not bare arrays
+        lobbies: (t.lobbies || [[], [], []]).map((lobby, idx) => ({
+          id: `${t.id}-lobby${idx + 1}`,
+          name: `Lobby ${idx + 1}`,
+          players: lobby,
+          status: lobby.length > 0 ? "active" : "waiting",
+        })),
         registeredPlayers: t.registeredPlayers || [],
       };
     });
@@ -60,7 +65,8 @@ async function emitTournamentSchedule(io) {
       visible.push({
         id: "dummy",
         tournamentId: "placeholder",
-        name: "No tournaments today",
+        name: "No tournaments available",
+        type: "placeholder",
         startTime: null,
         localTime: "—",
         game: "TBD",
@@ -72,7 +78,11 @@ async function emitTournamentSchedule(io) {
         isLive: false,
         hasStarted: false,
         romUrl: null,
-        lobbies: [[], [], []],
+        lobbies: [
+          { id: "dummy-lobby1", name: "Lobby 1", players: [], status: "waiting" },
+          { id: "dummy-lobby2", name: "Lobby 2", players: [], status: "waiting" },
+          { id: "dummy-lobby3", name: "Lobby 3", players: [], status: "waiting" },
+        ],
         registeredPlayers: [],
       });
     }
@@ -103,7 +113,12 @@ function watchSitNGoTables(io) {
             tournamentId: t.id,
             name: t.name,
             players: t.registeredPlayers || [],
-            lobbies: Array.isArray(t.lobbies) && t.lobbies.length === 3 ? t.lobbies : [[], [], []],
+            lobbies: (t.lobbies || [[], [], []]).map((lobby, idx) => ({
+              id: `${t.id}-lobby${idx + 1}`,
+              name: `Lobby ${idx + 1}`,
+              players: lobby,
+              status: lobby.length > 0 ? "active" : "waiting",
+            })),
             matchState: state || null,
           };
         })
