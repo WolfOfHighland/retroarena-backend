@@ -37,13 +37,19 @@ async function seedOpeningDay() {
       });
     }
 
-    // Upsert all with lobbies only on insert
+    // Upsert all with lobby objects only on insert
     const ops = payloads.map((t) => ({
       updateOne: {
         filter: { id: t.id },
         update: {
           $set: t,
-          $setOnInsert: { lobbies: [[], [], []] }
+          $setOnInsert: {
+            lobbies: [
+              { id: `${t.id}-lobby1`, name: "Lobby 1", players: [], status: "waiting" },
+              { id: `${t.id}-lobby2`, name: "Lobby 2", players: [], status: "waiting" },
+              { id: `${t.id}-lobby3`, name: "Lobby 3", players: [], status: "waiting" }
+            ]
+          }
         },
         upsert: true,
       }

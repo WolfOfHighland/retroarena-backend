@@ -67,8 +67,14 @@ async function seedFreerolls() {
         filter: { id: template.id },
         update: {
           $set: template,
-          // ✅ Guarantee 3 lobbies only on insert (doesn't wipe existing)
-          $setOnInsert: { lobbies: [[], [], []] }
+          // ✅ Guarantee 3 lobby objects with metadata
+          $setOnInsert: {
+            lobbies: [
+              { id: `${template.id}-lobby1`, name: "Lobby 1", players: [], status: "waiting" },
+              { id: `${template.id}-lobby2`, name: "Lobby 2", players: [], status: "waiting" },
+              { id: `${template.id}-lobby3`, name: "Lobby 3", players: [], status: "waiting" }
+            ]
+          }
         },
         upsert: true
       }
