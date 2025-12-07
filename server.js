@@ -61,7 +61,6 @@ const testJoinRoutes = require("./routes/testJoin")(io);
 const leaderboardRoutes = require('./routes/leaderboard')(io);
 
 // … rest of your routes …
-
 app.use('/api', (req, _res, next) => {
   console.log(`➡️ API ${req.method} ${req.originalUrl}`);
   next();
@@ -289,6 +288,7 @@ app.post("/api/tournaments/join/:id", async (req, res) => {
         maxPlayers,
       });
     }
+ 
   } catch (err) {
     console.error("❌ Tournament join error:", err.message);
     return res.status(500).json({ error: "Failed to join tournament" });
