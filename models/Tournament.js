@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 
+// ✅ Define Lobby schema explicitly
 const LobbySchema = new mongoose.Schema({
   id: { type: String, required: true },
   name: { type: String, required: true },
