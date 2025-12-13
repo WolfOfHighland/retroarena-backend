@@ -103,14 +103,19 @@ if (process.env.MONGO_URI) {
       // ✅ Guarantee 3 lobby objects exist
       const tournaments = await Tournament.find({});
       for (const t of tournaments) {
-        if (!t.lobbies || t.lobbies.length !== 3) {
+        const needsInit =
+          !Array.isArray(t.lobbies) ||
+          t.lobbies.length !== 3 ||
+          t.lobbies.some(l => !l || typeof l !== "object" || !Array.isArray(l.players));
+
+        if (needsInit) {
           t.lobbies = [
             { id: `${t._id}-lobby1`, name: "Lobby 1", players: [], status: "waiting" },
             { id: `${t._id}-lobby2`, name: "Lobby 2", players: [], status: "waiting" },
             { id: `${t._id}-lobby3`, name: "Lobby 3", players: [], status: "waiting" }
           ];
           await t.save();
-          console.log(`✅ Tournament ${t.id} ensured 3 lobbies`);
+          console.log(`✅ Tournament ${t.id || t._id} initialized with 3 lobby objects`);
         }
       }
 
@@ -131,14 +136,27 @@ if (process.env.MONGO_URI) {
 
 // ✅ Join routes with lobby assignment
 function assignToLobby(tournament, playerId) {
-  if (tournament.lobbies && tournament.lobbies.length > 0) {
-    const openLobby = tournament.lobbies.find(l => l.players.length < (t.maxPlayersPerLobby || 2));
-    if (openLobby) {
-      openLobby.players.push(playerId);
-    } else {
-      tournament.lobbies[0].players.push(playerId);
-    }
+  if (!Array.isArray(tournament.lobbies) || tournament.lobbies.length !== 3) {
+    tournament.lobbies = [
+      { id: `${tournament._id}-lobby1`, name: "Lobby 1", players: [], status: "waiting" },
+      { id: `${tournament._id}-lobby2`, name: "Lobby 2", players: [], status: "waiting" },
+      { id: `${tournament._id}-lobby3`, name: "Lobby 3", players: [], status: "waiting" }
+    ];
   }
+
+  const perLobbyCap = tournament.maxPlayersPerLobby > 0
+    ? tournament.maxPlayersPerLobby
+    : (tournament.maxPlayers > 0 ? Math.max(2, Math.ceil(tournament.maxPlayers / 3)) : 2);
+
+  let target = tournament.lobbies.find(l => (l.players?.length || 0) < perLobbyCap);
+  if (!target) {
+    target = tournament.lobbies.reduce((a, b) =>
+      (a.players?.length || 0) <= (b.players?.length || 0) ? a : b
+    );
+  }
+
+  target.players = Array.isArray(target.players) ? target.players : [];
+  if (!target.players.includes(playerId)) target.players.push(playerId);
 }
 
 app.post("/api/freeroll/register/:id", async (req, res) => {
@@ -269,6 +287,64 @@ app.post("/start-match", async (req, res) => {
   } catch (err) {
     console.error("❌ Failed to start match:", err.message);
     return res.status(500).json({ error: "Failed to start match" });
+  }
+});
+
+// ✅ Tournament list routes (for frontend to fetch lobbies)
+app.get("/api/tournaments", async (req, res) => {
+  try {
+    const tournaments = await Tournament.find().lean();
+    const shaped = tournaments.map(t => ({
+      id: t.id || t._id.toString(),
+      name: t.name,
+      startTime: t.startTime ?? null,
+      entryFee: t.entryFee ?? 0,
+      registeredPlayers: Array.isArray(t.registeredPlayers) ? t.registeredPlayers : [],
+      maxPlayers: t.maxPlayers ?? null,
+      prizeType: t.prizeType ?? "fixed",
+      prizeAmount: t.prizeAmount ?? 0,
+      game: t.game,
+      goalieMode: t.goalieMode ?? "manual",
+      periodLength: t.periodLength ?? 5,
+      elimination: t.elimination ?? "single",
+      isLive: t.isLive ?? false,
+      hasStarted: t.hasStarted ?? false,
+      type: t.type,
+      lobbies: Array.isArray(t.lobbies) ? t.lobbies : []
+    }));
+    res.json(shaped);
+  } catch (err) {
+    console.error("❌ Failed to fetch tournaments:", err.message);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/tournaments/:id", async (req, res) => {
+  try {
+    const t = await Tournament.findOne({ id: req.params.id }).lean();
+    if (!t) return res.status(404).json({ error: "Tournament not found" });
+    const shaped = {
+      id: t.id || t._id.toString(),
+      name: t.name,
+      startTime: t.startTime ?? null,
+      entryFee: t.entryFee ?? 0,
+      registeredPlayers: Array.isArray(t.registeredPlayers) ? t.registeredPlayers : [],
+      maxPlayers: t.maxPlayers ?? null,
+      prizeType: t.prizeType ?? "fixed",
+      prizeAmount: t.prizeAmount ?? 0,
+      game: t.game,
+      goalieMode: t.goalieMode ?? "manual",
+      periodLength: t.periodLength ?? 5,
+      elimination: t.elimination ?? "single",
+      isLive: t.isLive ?? false,
+      hasStarted: t.hasStarted ?? false,
+      type: t.type,
+      lobbies: Array.isArray(t.lobbies) ? t.lobbies : []
+    };
+    res.json(shaped);
+  } catch (err) {
+    console.error("❌ Failed to fetch tournament:", err.message);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
