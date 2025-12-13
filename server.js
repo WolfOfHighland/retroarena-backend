@@ -348,6 +348,22 @@ app.get("/api/tournaments/:id", async (req, res) => {
   }
 });
 
+// ✅ Separate feeds per type
+app.get("/api/tournaments/scheduled", async (req, res) => {
+  const tournaments = await Tournament.find({ type: "scheduled" }).lean();
+  res.json(tournaments);
+});
+
+app.get("/api/tournaments/freeroll", async (req, res) => {
+  const tournaments = await Tournament.find({ type: "freeroll" }).lean();
+  res.json(tournaments);
+});
+
+app.get("/api/tournaments/sit-n-go", async (req, res) => {
+  const tournaments = await Tournament.find({ type: "sit-n-go" }).lean();
+  res.json(tournaments);
+});
+
 // ✅ Route logging
 app._router.stack
   .filter(r => r.route)
