@@ -15,7 +15,7 @@ const freerollRoutes = require('./routes/freeroll');
 const seedOpeningDay = require('./scripts/seedOpeningDay');
 const seedSitNGo = require('./scripts/seedSitNGo');
 const seedFreerolls = require('./scripts/freerollSeed');
-const { saveMatchState, loadMatchState, setRedis } = require('./utils/matchState');
+const { saveMatchState, setRedis } = require('./utils/matchState');
 const { emitTournamentSchedule, watchSitNGoTables } = require('./scheduler/emitTournamentSchedule');
 
 const Player = require('./models/Player');
@@ -23,7 +23,7 @@ const Tournament = require('./models/Tournament');
 
 const app = express();
 
-// ✅ Define allowed origins once
+// ✅ Allowed origins
 const allowedOrigins = [
   "https://retrorumblearena.com",
   "https://www.retrorumblearena.com",
@@ -31,7 +31,6 @@ const allowedOrigins = [
 ];
 const vercelRegex = /\.vercel\.app$/;
 
-// ✅ Express CORS middleware
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin) || vercelRegex.test(origin)) {
@@ -47,32 +46,24 @@ app.use(cors({
 app.use(express.json());
 
 const server = http.createServer(app);
-
-// ✅ Socket.IO CORS config
 const io = new Server(server, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-  },
+  cors: { origin: allowedOrigins, methods: ["GET", "POST"] },
 });
 module.exports.io = io;
 
 const testJoinRoutes = require("./routes/testJoin")(io);
 const leaderboardRoutes = require('./routes/leaderboard')(io);
 
-// … rest of your routes …
 app.use('/api', (req, _res, next) => {
   console.log(`➡️ API ${req.method} ${req.originalUrl}`);
   next();
 });
 
 // ✅ Redis setup
-let redis;
 if (process.env.REDIS_URL) {
   const pubClient = createClient({ url: process.env.REDIS_URL });
   const subClient = pubClient.duplicate();
-  redis = pubClient;
-  setRedis(redis);
+  setRedis(pubClient);
 
   (async () => {
     try {
@@ -88,6 +79,7 @@ if (process.env.REDIS_URL) {
   console.log('⚠️ No REDIS_URL provided — skipping Redis adapter');
 }
 
+// ✅ MongoDB + seeding
 if (process.env.MONGO_URI) {
   mongoose.connect(process.env.MONGO_URI, {
     dbName: 'retro_rumble',
@@ -97,24 +89,26 @@ if (process.env.MONGO_URI) {
   .then(async () => {
     console.log('✅ Connected to MongoDB');
 
-    // Clean up expired scheduled tournaments
     await Tournament.deleteMany({
       type: "scheduled",
       startTime: { $lt: new Date() },
       registeredPlayers: []
     });
 
-    // Seed scripts
     try {
       await seedOpeningDay();
       await seedSitNGo();
       await seedFreerolls();
 
-      // ✅ Guarantee 3 lobbies exist for every tournament
+      // ✅ Guarantee 3 lobby objects exist
       const tournaments = await Tournament.find({});
       for (const t of tournaments) {
         if (!t.lobbies || t.lobbies.length !== 3) {
-          t.lobbies = [[], [], []];
+          t.lobbies = [
+            { id: `${t._id}-lobby1`, name: "Lobby 1", players: [], status: "waiting" },
+            { id: `${t._id}-lobby2`, name: "Lobby 2", players: [], status: "waiting" },
+            { id: `${t._id}-lobby3`, name: "Lobby 3", players: [], status: "waiting" }
+          ];
           await t.save();
           console.log(`✅ Tournament ${t.id} ensured 3 lobbies`);
         }
@@ -125,8 +119,7 @@ if (process.env.MONGO_URI) {
       console.error('⚠️ Seeding error:', err);
     }
 
-    // Kick off schedulers
-    emitTournamentSchedule(io); // ✅ always emits tournaments, even if empty
+    emitTournamentSchedule(io);
     watchSitNGoTables(io);
   })
   .catch((err) => {
@@ -136,179 +129,112 @@ if (process.env.MONGO_URI) {
   console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
 }
 
-app.post('/register-player', async (req, res) => {
-  const { username, email, country, socketId } = req.body;
-  if (!username?.trim() || !email?.trim()) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
-  const trimmedUsername = username.trim();
-  const trimmedEmail = email.trim();
-  const trimmedCountry = country?.trim();
-
-  try {
-    const existing = await Player.findOne({ email: trimmedEmail });
-    const roomExists = io.sockets.adapter.rooms.has(trimmedEmail);
-
-    const emitPayload = {
-      username: existing ? existing.username : trimmedUsername,
-      status: existing ? 'existing' : 'new',
-    };
-
-    if (existing) {
-      if (roomExists) {
-        io.to(trimmedEmail).emit('registrationConfirmed', emitPayload);
-      } else if (socketId) {
-        io.to(socketId).emit('registrationConfirmed', emitPayload);
-      }
-      return res.status(409).json({ error: 'Player already registered' });
+// ✅ Join routes with lobby assignment
+function assignToLobby(tournament, playerId) {
+  if (tournament.lobbies && tournament.lobbies.length > 0) {
+    const openLobby = tournament.lobbies.find(l => l.players.length < (t.maxPlayersPerLobby || 2));
+    if (openLobby) {
+      openLobby.players.push(playerId);
+    } else {
+      tournament.lobbies[0].players.push(playerId);
     }
-
-    const newPlayer = new Player({ username: trimmedUsername, email: trimmedEmail, country: trimmedCountry });
-    await newPlayer.save();
-
-    if (roomExists) {
-      io.to(trimmedEmail).emit('registrationConfirmed', emitPayload);
-    } else if (socketId) {
-      io.to(socketId).emit('registrationConfirmed', emitPayload);
-    }
-
-    return res.status(200).json({ message: 'Player registered successfully' });
-  } catch (err) {
-    console.error('❌ Registration error:', err.message);
-    return res.status(500).json({ error: 'Failed to register player' });
   }
-});
+}
 
-// ✅ Freeroll join route with matchmaker logic
 app.post("/api/freeroll/register/:id", async (req, res) => {
   const tournamentId = req.params.id;
   const { playerId } = req.body;
 
   try {
     const tournament = await Tournament.findOne({ id: tournamentId });
-    if (!tournament) {
-      return res.status(404).json({ error: "Tournament not found" });
-    }
+    if (!tournament) return res.status(404).json({ error: "Tournament not found" });
 
     if (!tournament.registeredPlayers.includes(playerId)) {
       tournament.registeredPlayers.push(playerId);
+      assignToLobby(tournament, playerId);
       await tournament.save();
     }
 
     const playersJoined = tournament.registeredPlayers.length;
     const maxPlayers = tournament.maxPlayers || null;
 
-    if (maxPlayers && playersJoined >= maxPlayers) {
-      return res.json({
-        matchId: tournament.id,
-        playersJoined,
-        maxPlayers,
-      });
-    } else {
-      return res.json({
-        matchId: null,
-        playersJoined,
-        maxPlayers,
-      });
-    }
+    return res.json({
+      matchId: maxPlayers && playersJoined >= maxPlayers ? tournament.id : null,
+      playersJoined,
+      maxPlayers,
+    });
   } catch (err) {
     console.error("❌ Freeroll join error:", err.message);
     return res.status(500).json({ error: "Failed to join freeroll" });
   }
 });
 
-// ✅ Sit-n-Go join route with matchmaker logic
 app.post("/api/sit-n-go/join/:id", async (req, res) => {
   const tableId = req.params.id;
   const { playerId } = req.body;
 
   try {
     const table = await Tournament.findOne({ id: tableId });
-    if (!table) {
-      return res.status(404).json({ error: "Sit-n-Go table not found" });
-    }
+    if (!table) return res.status(404).json({ error: "Sit-n-Go table not found" });
 
     if (!table.registeredPlayers.includes(playerId)) {
       table.registeredPlayers.push(playerId);
+      assignToLobby(table, playerId);
       await table.save();
     }
 
     const playersJoined = table.registeredPlayers.length;
     const maxPlayers = table.maxPlayers || null;
 
-    if (maxPlayers && playersJoined >= maxPlayers) {
-      return res.json({
-        matchId: table.id,
-        playersJoined,
-        maxPlayers,
-      });
-    } else {
-      return res.json({
-        matchId: null,
-        playersJoined,
-        maxPlayers,
-      });
-    }
+    return res.json({
+      matchId: maxPlayers && playersJoined >= maxPlayers ? table.id : null,
+      playersJoined,
+      maxPlayers,
+    });
   } catch (err) {
     console.error("❌ Sit-n-Go join error:", err.message);
     return res.status(500).json({ error: "Failed to join Sit-n-Go" });
   }
 });
 
-// ✅ Scheduled tournament join route with matchmaker logic
 app.post("/api/tournaments/join/:id", async (req, res) => {
   const tournamentId = req.params.id;
   const { playerId } = req.body;
 
   try {
     const tournament = await Tournament.findOne({ id: tournamentId });
-    if (!tournament) {
-      return res.status(404).json({ error: "Tournament not found" });
-    }
+    if (!tournament) return res.status(404).json({ error: "Tournament not found" });
 
     if (!tournament.registeredPlayers.includes(playerId)) {
       tournament.registeredPlayers.push(playerId);
+      assignToLobby(tournament, playerId);
       await tournament.save();
     }
 
     const playersJoined = tournament.registeredPlayers.length;
     const maxPlayers = tournament.maxPlayers || null;
 
-    if (maxPlayers && playersJoined >= maxPlayers) {
-      return res.json({
-        matchId: tournament.id,
-        playersJoined,
-        maxPlayers,
-      });
-    } else {
-      return res.json({
-        matchId: null,
-        playersJoined,
-        maxPlayers,
-      });
-    }
- 
+    return res.json({
+      matchId: maxPlayers && playersJoined >= maxPlayers ? tournament.id : null,
+      playersJoined,
+      maxPlayers,
+    });
   } catch (err) {
     console.error("❌ Tournament join error:", err.message);
     return res.status(500).json({ error: "Failed to join tournament" });
   }
 });
 
-// ✅ Start match route with netplay wiring
+// ✅ Start match route
 app.post("/start-match", async (req, res) => {
   const { tournamentId, rom, core } = req.body;
-
   if (!tournamentId || !rom || !core) {
     return res.status(400).json({ error: "Missing tournamentId, rom, or core" });
   }
 
   try {
     const tournament = await Tournament.findOne({ id: tournamentId });
-
-    if (!tournament) {
-      return res.status(404).json({ error: "Tournament not found" });
-    }
+    if (!tournament) return res.status(404).json({ error: "Tournament not found" });
 
     const matchState = {
       rom: `/roms/${rom}`,
@@ -321,7 +247,6 @@ app.post("/start-match", async (req, res) => {
 
     await saveMatchState(tournamentId, matchState);
 
-    // ✅ Delay emit to ensure sockets join rooms
     setTimeout(() => {
       const players = tournament.registeredPlayers || [];
       players.forEach((playerId, index) => {
