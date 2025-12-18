@@ -319,10 +319,28 @@ app.get("/api/tournaments", async (req, res) => {
   }
 });
 
+// Specific feeds first
+app.get("/api/tournaments/scheduled", async (req, res) => {
+  const tournaments = await Tournament.find({ type: "scheduled" }).lean();
+  res.json(tournaments);
+});
+
+app.get("/api/tournaments/freeroll", async (req, res) => {
+  const tournaments = await Tournament.find({ type: "freeroll" }).lean();
+  res.json(tournaments);
+});
+
+app.get("/api/tournaments/sit-n-go", async (req, res) => {
+  const tournaments = await Tournament.find({ type: "sit-n-go" }).lean();
+  res.json(tournaments);
+});
+
+// Catch-all by ID last (only once!)
 app.get("/api/tournaments/:id", async (req, res) => {
   try {
     const t = await Tournament.findOne({ id: req.params.id }).lean();
     if (!t) return res.status(404).json({ error: "Tournament not found" });
+
     const shaped = {
       id: t.id || t._id.toString(),
       name: t.name,
@@ -341,6 +359,7 @@ app.get("/api/tournaments/:id", async (req, res) => {
       type: t.type,
       lobbies: Array.isArray(t.lobbies) ? t.lobbies : []
     };
+
     res.json(shaped);
   } catch (err) {
     console.error("❌ Failed to fetch tournament:", err.message);
@@ -348,21 +367,6 @@ app.get("/api/tournaments/:id", async (req, res) => {
   }
 });
 
-// ✅ Separate feeds per type
-app.get("/api/tournaments/scheduled", async (req, res) => {
-  const tournaments = await Tournament.find({ type: "scheduled" }).lean();
-  res.json(tournaments);
-});
-
-app.get("/api/tournaments/freeroll", async (req, res) => {
-  const tournaments = await Tournament.find({ type: "freeroll" }).lean();
-  res.json(tournaments);
-});
-
-app.get("/api/tournaments/sit-n-go", async (req, res) => {
-  const tournaments = await Tournament.find({ type: "sit-n-go" }).lean();
-  res.json(tournaments);
-});
 
 // ✅ Route logging
 app._router.stack
