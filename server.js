@@ -134,31 +134,45 @@ if (process.env.MONGO_URI) {
   console.log('⚠️ No MONGO_URI provided — skipping MongoDB connection');
 }
 
-// ✅ Join routes with lobby assignment
+// ✅ Dynamic lobby assignment
 function assignToLobby(tournament, playerId) {
-  if (!Array.isArray(tournament.lobbies) || tournament.lobbies.length !== 3) {
-    tournament.lobbies = [
-      { id: `${tournament._id}-lobby1`, name: "Lobby 1", players: [], status: "waiting" },
-      { id: `${tournament._id}-lobby2`, name: "Lobby 2", players: [], status: "waiting" },
-      { id: `${tournament._id}-lobby3`, name: "Lobby 3", players: [], status: "waiting" }
-    ];
+  if (!Array.isArray(tournament.lobbies)) {
+    tournament.lobbies = [];
   }
 
   const perLobbyCap = tournament.maxPlayersPerLobby > 0
     ? tournament.maxPlayersPerLobby
-    : (tournament.maxPlayers > 0 ? Math.max(2, Math.ceil(tournament.maxPlayers / 3)) : 2);
+    : (tournament.maxPlayers > 0 ? tournament.maxPlayers : 2);
 
   let target = tournament.lobbies.find(l => (l.players?.length || 0) < perLobbyCap);
+
   if (!target) {
-    target = tournament.lobbies.reduce((a, b) =>
-      (a.players?.length || 0) <= (b.players?.length || 0) ? a : b
-    );
+    const lobbyNumber = tournament.lobbies.length + 1;
+    target = {
+      id: `${tournament._id}-lobby${lobbyNumber}`,
+      name: `Lobby ${lobbyNumber}`,
+      players: [],
+      status: "waiting"
+    };
+    tournament.lobbies.push(target);
   }
 
   target.players = Array.isArray(target.players) ? target.players : [];
   if (!target.players.includes(playerId)) target.players.push(playerId);
 }
 
+// ✅ Start condition helper
+function shouldStartTournament(tournament) {
+  if (tournament.type === "freeroll" || tournament.type === "sit-n-go") {
+    return tournament.registeredPlayers.length >= tournament.maxPlayers;
+  }
+  if (tournament.type === "scheduled") {
+    return tournament.startTime && new Date(tournament.startTime).getTime() <= Date.now();
+  }
+  return false;
+}
+
+// ✅ Freeroll join
 app.post("/api/freeroll/register/:id", async (req, res) => {
   const tournamentId = req.params.id;
   const { playerId } = req.body;
@@ -173,13 +187,15 @@ app.post("/api/freeroll/register/:id", async (req, res) => {
       await tournament.save();
     }
 
-    const playersJoined = tournament.registeredPlayers.length;
-    const maxPlayers = tournament.maxPlayers || null;
+    if (shouldStartTournament(tournament)) {
+      tournament.hasStarted = true;
+      await tournament.save();
+    }
 
     return res.json({
-      matchId: maxPlayers && playersJoined >= maxPlayers ? tournament.id : null,
-      playersJoined,
-      maxPlayers,
+      matchId: tournament.hasStarted ? tournament.id : null,
+      playersJoined: tournament.registeredPlayers.length,
+      maxPlayers: tournament.maxPlayers || null,
     });
   } catch (err) {
     console.error("❌ Freeroll join error:", err.message);
@@ -187,6 +203,7 @@ app.post("/api/freeroll/register/:id", async (req, res) => {
   }
 });
 
+// ✅ Sit-n-Go join
 app.post("/api/sit-n-go/join/:id", async (req, res) => {
   const tableId = req.params.id;
   const { playerId } = req.body;
@@ -201,13 +218,15 @@ app.post("/api/sit-n-go/join/:id", async (req, res) => {
       await table.save();
     }
 
-    const playersJoined = table.registeredPlayers.length;
-    const maxPlayers = table.maxPlayers || null;
+    if (shouldStartTournament(table)) {
+      table.hasStarted = true;
+      await table.save();
+    }
 
     return res.json({
-      matchId: maxPlayers && playersJoined >= maxPlayers ? table.id : null,
-      playersJoined,
-      maxPlayers,
+      matchId: table.hasStarted ? table.id : null,
+      playersJoined: table.registeredPlayers.length,
+      maxPlayers: table.maxPlayers || null,
     });
   } catch (err) {
     console.error("❌ Sit-n-Go join error:", err.message);
@@ -215,6 +234,7 @@ app.post("/api/sit-n-go/join/:id", async (req, res) => {
   }
 });
 
+// ✅ Scheduled tournament join
 app.post("/api/tournaments/join/:id", async (req, res) => {
   const tournamentId = req.params.id;
   const { playerId } = req.body;
@@ -229,13 +249,15 @@ app.post("/api/tournaments/join/:id", async (req, res) => {
       await tournament.save();
     }
 
-    const playersJoined = tournament.registeredPlayers.length;
-    const maxPlayers = tournament.maxPlayers || null;
+    if (shouldStartTournament(tournament)) {
+      tournament.hasStarted = true;
+      await tournament.save();
+    }
 
     return res.json({
-      matchId: maxPlayers && playersJoined >= maxPlayers ? tournament.id : null,
-      playersJoined,
-      maxPlayers,
+      matchId: tournament.hasStarted ? tournament.id : null,
+      playersJoined: tournament.registeredPlayers.length,
+      maxPlayers: tournament.maxPlayers || null,
     });
   } catch (err) {
     console.error("❌ Tournament join error:", err.message);
